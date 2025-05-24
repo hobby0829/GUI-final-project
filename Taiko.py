@@ -1,78 +1,131 @@
 import tkinter as tk
-import random
+import json
+import time
+import pygame
+import threading
 
 WIDTH = 800
 HEIGHT = 400
-SPEED = 5
-HIT_POSITION = 100  # 鼓面位置
-TICK_INTERVAL = 20  # ms
+DRUM_SPEED = 5
+JUDGE_LINE = 100
+HIT_RANGE = 30
+
+HIT_WAV = "assets/hit.wav"
+BEAT_MAP = "assets/beatmap.json"
+BGM = "assets/bgm.mp3"
 
 class TaikoGame:
     def __init__(self, root):
         self.root = root
-        self.root.title("簡易太鼓達人")
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg="white")
+        self.root.title("太鼓達人加強版")
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='white')
         self.canvas.pack()
 
+        # 初始化 pygame 音效
+        pygame.mixer.init()
+        self.hit_sound_red = pygame.mixer.Sound(HIT_WAV)
+        self.hit_sound_blue = pygame.mixer.Sound(HIT_WAV)
+        self.bgm = BGM
+
+        # 分數與 combo
         self.score = 0
-        self.notes = []
-        self.running = True
+        self.combo = 0
 
-        self.canvas.create_text(70, 30, text="分數：", font=("Arial", 16), anchor="w")
-        self.score_text = self.canvas.create_text(140, 30, text="0", font=("Arial", 16), anchor="w")
+        # 顯示文字
+        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16))
+        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16))
+        self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
 
-        # 鼓面區域
-        self.canvas.create_oval(HIT_POSITION-40, HEIGHT//2-40, HIT_POSITION+40, HEIGHT//2+40, fill="gray", outline="black")
+        # 判定線
+        self.canvas.create_line(JUDGE_LINE, 0, JUDGE_LINE, HEIGHT, fill='gray', dash=(4, 2))
 
-        # 綁定按鍵
+        # 鼓列表與開始時間
+        self.drums = []
+        self.start_time = None
+        self.chart = []
+
+        # 綁定鍵盤
         self.root.bind("<KeyPress-z>", self.hit_red)
         self.root.bind("<KeyPress-x>", self.hit_blue)
 
-        self.root.after(1000, self.spawn_note)
-        self.root.after(TICK_INTERVAL, self.move_notes)
+        # 載入譜面與開始遊戲
+        self.load_score(BEAT_MAP)
+        self.start_game()
 
-    def spawn_note(self):
-        if not self.running:
-            return
-        kind = random.choice(["red", "blue"])
-        color = "red" if kind == "red" else "blue"
-        note = self.canvas.create_oval(WIDTH, HEIGHT//2-20, WIDTH+40, HEIGHT//2+20, fill=color)
-        self.notes.append((note, kind))
-        self.root.after(random.randint(1000, 2000), self.spawn_note)
+    def load_score(self, file):
+        with open(file, 'r') as f:
+            self.chart = json.load(f)
 
-    def move_notes(self):
-        if not self.running:
-            return
-        to_remove = []
-        for note, _ in self.notes:
-            self.canvas.move(note, -SPEED, 0)
-            x1, y1, x2, y2 = self.canvas.coords(note)
-            if x2 < 0:
-                to_remove.append((note, _))
+    def start_game(self):
+        self.start_time = int(time.time() * 1000)
+        threading.Thread(target=self.play_bgm).start()
+        self.schedule_drums()
+        self.move_drums()
 
-        for note in to_remove:
-            self.notes.remove(note)
-            self.canvas.delete(note[0])
+    def play_bgm(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.play()
 
-        self.root.after(TICK_INTERVAL, self.move_notes)
+    def schedule_drums(self):
+        now = int(time.time() * 1000) - self.start_time
+        for note in self.chart:
+            if 0 <= note['time'] - now <= 50:  # 時間快到就生成
+                self.spawn_drum(note['type'])
+                self.chart.remove(note)
+        self.root.after(50, self.schedule_drums)
 
-    def hit_red(self, event=None):
-        self.hit("red")
+    def spawn_drum(self, drum_type):
+        color = 'red' if drum_type == 'red' else 'blue'
+        y = HEIGHT // 2
+        drum = {
+            'id': self.canvas.create_oval(WIDTH, y - 30, WIDTH + 60, y + 30, fill=color),
+            'type': drum_type,
+            'x': WIDTH
+        }
+        self.drums.append(drum)
 
-    def hit_blue(self, event=None):
-        self.hit("blue")
+    def move_drums(self):
+        for drum in self.drums:
+            drum['x'] -= DRUM_SPEED
+            self.canvas.coords(drum['id'], drum['x'], HEIGHT // 2 - 30, drum['x'] + 60, HEIGHT // 2 + 30)
+        self.drums = [d for d in self.drums if d['x'] + 60 > 0]
+        self.root.after(30, self.move_drums)
 
-    def hit(self, color):
-        for note, kind in self.notes:
-            x1, y1, x2, y2 = self.canvas.coords(note)
-            if HIT_POSITION - 30 <= x1 <= HIT_POSITION + 30 and kind == color:
-                self.canvas.delete(note)
-                self.notes.remove((note, kind))
-                self.score += 10
-                self.canvas.itemconfig(self.score_text, text=str(self.score))
-                break
+    def hit_red(self, event):
+        self.play_hit_sound('red')
+        self.check_hit('red')
 
-if __name__ == "__main__":
+    def hit_blue(self, event):
+        self.play_hit_sound('blue')
+        self.check_hit('blue')
+
+    def check_hit(self, hit_type):
+        for drum in self.drums:
+            if drum['type'] == hit_type and abs(drum['x'] - JUDGE_LINE) < HIT_RANGE:
+                
+                self.canvas.itemconfig(self.judge_text, text='Perfect!')
+                self.canvas.delete(drum['id'])
+                self.drums.remove(drum)
+                self.combo += 1
+                self.score += 100
+                self.update_score()
+                return
+        self.combo = 0
+        self.canvas.itemconfig(self.judge_text, text='Miss')
+        self.update_score()
+
+    def play_hit_sound(self, drum_type):
+        if drum_type == 'red':
+            self.hit_sound_red.play()
+        elif drum_type == 'blue':
+            self.hit_sound_blue.play()
+
+    def update_score(self):
+        self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
+        self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
+
+# 主程式
+if __name__ == '__main__':
     root = tk.Tk()
     game = TaikoGame(root)
     root.mainloop()
