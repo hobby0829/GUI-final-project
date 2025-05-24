@@ -15,6 +15,7 @@ HIT_RANGE = 30
 HIT_WAV = "assets/sound/hit.wav"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
+BGM_MENU = "assets/song/test.mp3"
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -34,11 +35,15 @@ class MainMenu:
         self.root = root
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='lightblue')
         self.canvas.pack()
-
+        self.volume_var = 100
+        
         self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="太鼓達人 加強版", font=("Arial", 32, "bold"))
+        pygame.mixer.init()
+        self.bgm = BGM_MENU
+        self.play_bgm()
 
         self.start_btn = tk.Button(root, text="開始遊戲", font=("Arial", 16), command=self.start_game)
-        self.quit_btn = tk.Button(root, text="離開遊戲", font=("Arial", 16), command=root.quit)
+        self.quit_btn = tk.Button(root, text="選單", font=("Arial", 16), command=self.show_options_menu)
 
         self.start_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2)
         self.quit_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 50)
@@ -47,16 +52,50 @@ class MainMenu:
         self.start_btn.place_forget()
         self.quit_btn.place_forget()
         self.canvas.destroy()
-        SongSelect(self.root, self.start_taiko_game)
+        SongSelect(self.root, self.start_taiko_game, self.volume_var)
 
-    def start_taiko_game(self, song_path, beatmap_path):
-        TaikoGame(self.root, song_path, beatmap_path)
+    def start_taiko_game(self, song_path, beatmap_path, volume_var):
+        TaikoGame(self.root, song_path, beatmap_path, volume_var)
+
+    def play_bgm(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.play()
+
+    def show_options_menu(self):
+        options_window = tk.Toplevel(self.root)
+        options_window.title("選項")
+        options_window.geometry("300x200")
+        options_window.resizable(False, False)
+
+        def open_volume_control():
+                volume_window = tk.Toplevel(self.root)
+                volume_window.title("音量控制")
+                volume_window.geometry("300x150")
+                volume_window.resizable(False, False)
+
+                tk.Label(volume_window, text="背景音樂音量", font=("Arial", 14)).pack(pady=10)
+
+                current_volume = pygame.mixer.music.get_volume()
+                volume_var = tk.DoubleVar(value=current_volume * 100)
+
+                def set_volume(val):
+                    volume = float(val) / 100
+                    pygame.mixer.music.set_volume(volume)
+                    self.volume_var = float(val)  # ✅ 更新 self.volume_var
+
+                tk.Scale(volume_window, from_=0, to=100, orient='horizontal',
+                        variable=volume_var, command=set_volume).pack(pady=5)
+
+                tk.Button(volume_window, text="關閉", command=volume_window.destroy).pack(pady=10)
+
+        tk.Button(options_window, text="音量大小", font=("Arial", 12), command=open_volume_control).pack(pady=5)
+        tk.Button(options_window, text="關閉選單", font=("Arial", 12), command=options_window.destroy).pack(pady=20)
 
 class SongSelect:
-    def __init__(self, root, on_song_selected):
+    def __init__(self, root, on_song_selected, volume_var):
         self.root = root
         self.on_song_selected = on_song_selected
-
+        self.volume_var = volume_var
         self.canvas = tk.Canvas(root, width=800, height=400, bg='#1e1e1e')
         self.canvas.pack()
 
@@ -77,7 +116,7 @@ class SongSelect:
             btn = tk.Button(
                 self.root,
                 text=song,
-                command=lambda name=song: self.confirm_song(name),
+                command=lambda name=song: self.confirm_song(name, self.volume_var),
                 font=("Arial", 14, "bold"),
                 bg="#4CAF50",
                 fg="white",
@@ -90,13 +129,13 @@ class SongSelect:
             btn.place(x=800//2 - 150, y=100 + i * 50)
             self.song_buttons.append(btn)
 
-    def confirm_song(self, song):
+    def confirm_song(self, song, volume_var):
         answer = messagebox.askyesno("確認", f"是否要遊玩「{song}」？")
         if answer:
             beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
             song_path = os.path.join("assets", "song", f"{song}.mp3")
             self.cleanup()
-            self.on_song_selected(song_path, beatmap_path)
+            self.on_song_selected(song_path, beatmap_path, volume_var)
 
     def cleanup(self):
         self.canvas.destroy()
@@ -104,7 +143,7 @@ class SongSelect:
             btn.destroy()
 
 class TaikoGame:
-    def __init__(self, root, song_path, beatmap_path):
+    def __init__(self, root, song_path, beatmap_path, volume_var):
         self.root = root
         self.root.title("太鼓達人加強版")
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='white')
@@ -158,7 +197,7 @@ class TaikoGame:
             sliderrelief='flat',
             highlightthickness=0
         )
-        self.volume_slider.set(100)  # 預設最大音量
+        self.volume_slider.set(volume_var)
         self.volume_slider.place_forget()
 
         self.root.bind("<KeyPress-p>", self.toggle_pause_key)
@@ -168,7 +207,7 @@ class TaikoGame:
         self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, **btn_style)
 
 
-        self.set_volume(self.volume_slider.get())
+        self.set_volume(volume_var)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
@@ -254,6 +293,7 @@ class TaikoGame:
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.set_volume(self.volume_slider.get() / 100)
         pygame.mixer.music.play()
 
     def schedule_drums(self):
