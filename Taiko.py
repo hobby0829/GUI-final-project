@@ -30,17 +30,24 @@ btn_style = {
     "cursor": "hand2"
 }
 
+class GameSettings:
+    def __init__(self):
+        self.volume = 100
+        self.red_button = "<KeyPress-z>"
+        self.blue_button = "<KeyPress-x>"
+
 class MainMenu:
-    def __init__(self, root):
+    def __init__(self, root, settings):
         self.root = root
+        self.settings = settings
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='lightblue')
         self.canvas.pack()
-        self.volume_var = 100
-        
-        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="太鼓達人 加強版", font=("Arial", 32, "bold"))
+
         pygame.mixer.init()
         self.bgm = BGM_MENU
         self.play_bgm()
+
+        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="太鼓達人 加強版", font=("Arial", 32, "bold"))
 
         self.start_btn = tk.Button(root, text="開始遊戲", font=("Arial", 16), command=self.start_game)
         self.quit_btn = tk.Button(root, text="選單", font=("Arial", 16), command=self.show_options_menu)
@@ -52,58 +59,126 @@ class MainMenu:
         self.start_btn.place_forget()
         self.quit_btn.place_forget()
         self.canvas.destroy()
-        SongSelect(self.root, self.start_taiko_game, self.volume_var)
+        SongSelect(self.root, self.start_taiko_game, self.settings)
 
-    def start_taiko_game(self, song_path, beatmap_path, volume_var):
-        TaikoGame(self.root, song_path, beatmap_path, volume_var)
+    def start_taiko_game(self, song_path, beatmap_path, settings):
+        TaikoGame(self.root, song_path, beatmap_path, settings)
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
 
     def show_options_menu(self):
         options_window = tk.Toplevel(self.root)
         options_window.title("選項")
-        options_window.geometry("300x200")
+        options_window.geometry("300x300")
         options_window.resizable(False, False)
 
         def open_volume_control():
-                volume_window = tk.Toplevel(self.root)
-                volume_window.title("音量控制")
-                volume_window.geometry("300x150")
-                volume_window.resizable(False, False)
+            volume_window = tk.Toplevel(self.root)
+            volume_window.title("音量控制")
+            volume_window.geometry("300x150")
+            volume_window.resizable(False, False)
 
-                tk.Label(volume_window, text="背景音樂音量", font=("Arial", 14)).pack(pady=10)
+            tk.Label(volume_window, text="背景音樂音量", font=("Arial", 14)).pack(pady=10)
 
-                current_volume = pygame.mixer.music.get_volume()
-                volume_var = tk.DoubleVar(value=current_volume * 100)
+            current_volume = pygame.mixer.music.get_volume()
+            volume_var = tk.DoubleVar(value=current_volume * 100)
 
-                def set_volume(val):
-                    volume = float(val) / 100
-                    pygame.mixer.music.set_volume(volume)
-                    self.volume_var = float(val)  # ✅ 更新 self.volume_var
+            def set_volume(val):
+                volume = float(val) / 100
+                pygame.mixer.music.set_volume(volume)
+                self.settings.volume = float(val)  # ✅ 更新 settings
 
-                tk.Scale(volume_window, from_=0, to=100, orient='horizontal',
-                        variable=volume_var, command=set_volume).pack(pady=5)
+            tk.Scale(volume_window, from_=0, to=100, orient='horizontal',
+                    variable=volume_var, command=set_volume).pack(pady=5)
 
-                tk.Button(volume_window, text="關閉", command=volume_window.destroy).pack(pady=10)
+            tk.Button(volume_window, text="關閉", command=volume_window.destroy).pack(pady=10)
 
-        tk.Button(options_window, text="音量大小", font=("Arial", 12), command=open_volume_control).pack(pady=5)
+        def open_keybind_control():
+            keybind_window = tk.Toplevel(self.root)
+            keybind_window.title("按鍵設定")
+            keybind_window.geometry("300x200")
+            keybind_window.resizable(False, False)
+            tk.Label(keybind_window, text="點擊欄位後按下要設定的按鍵", font=("Arial", 10), fg="gray").pack(pady=2)
+            
+            tk.Label(keybind_window, text="紅色:", font=("Arial", 12)).pack(pady=5)
+            red_var = tk.StringVar()
+            blue_var = tk.StringVar()
+
+            red_entry = tk.Entry(keybind_window, font=("Arial", 12), textvariable=red_var, state="readonly")
+            red_entry.pack()
+            
+            tk.Label(keybind_window, text="藍色:", font=("Arial", 12)).pack(pady=5)
+            blue_entry = tk.Entry(keybind_window, font=("Arial", 12), textvariable=blue_var, state="readonly")
+            blue_entry.pack()
+
+            special_keys = {
+                "space", "Left", "Right", "Up", "Down", "Return",
+                "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R"
+            }
+
+            def handle_key(event, var):
+                key = event.keysym
+                if len(key) == 1:
+                    var.set(key.lower())
+                elif key in special_keys:
+                    var.set(key)
+                else:
+                    var.set("")  # 不合法就清空
+
+            red_entry.bind("<KeyPress>", lambda e: handle_key(e, red_var))
+            blue_entry.bind("<KeyPress>", lambda e: handle_key(e, blue_var))
+
+            # 初始化
+            red_key = self.settings.red_button.replace("<KeyPress-", "").replace(">", "")
+            blue_key = self.settings.blue_button.replace("<KeyPress-", "").replace(">", "")
+            red_var.set(red_key)
+            blue_var.set(blue_key)
+
+            def save_keybinds():
+                red_key = red_var.get().strip()
+                blue_key = blue_var.get().strip()
+                if red_key and blue_key:
+                    self.settings.red_button = f"<KeyPress-{red_key}>"
+                    self.settings.blue_button = f"<KeyPress-{blue_key}>"
+                    messagebox.showinfo("成功", "按鍵綁定已更新")
+                    keybind_window.destroy()
+                else:
+                    messagebox.showwarning("錯誤", "請按下有效按鍵")
+            
+            tk.Button(keybind_window, text="儲存", command=save_keybinds).pack(pady=10)
+
+        # 主選單的按鈕
+        tk.Button(options_window, text="音量大小", font=("Arial", 12), command=open_volume_control).pack(pady=10)
+        tk.Button(options_window, text="更改按鍵", font=("Arial", 12), command=open_keybind_control).pack(pady=10)
         tk.Button(options_window, text="關閉選單", font=("Arial", 12), command=options_window.destroy).pack(pady=20)
-
+    
 class SongSelect:
-    def __init__(self, root, on_song_selected, volume_var):
+    def __init__(self, root, on_song_selected, settings):
         self.root = root
         self.on_song_selected = on_song_selected
-        self.volume_var = volume_var
+        self.settings = settings
+
         self.canvas = tk.Canvas(root, width=800, height=400, bg='#1e1e1e')
         self.canvas.pack()
 
         self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
-
         self.song_buttons = []
 
+        # 左上角的返回按鈕
+        self.back_btn = tk.Button(root, text="回主菜單", font=("Arial", 12), command=self.return_to_main_menu)
+        self.back_btn.place(x=10, y=10)
+
         self.load_song_list(SONG_LIST)  # 讀取歌曲資料夾名稱
+
+    def return_to_main_menu(self):
+        self.canvas.destroy()
+        self.back_btn.destroy()
+        for btn in self.song_buttons:
+            btn.destroy()
+        MainMenu(self.root, self.settings)
 
     def load_song_list(self, folder):
         songs = [
@@ -116,7 +191,7 @@ class SongSelect:
             btn = tk.Button(
                 self.root,
                 text=song,
-                command=lambda name=song: self.confirm_song(name, self.volume_var),
+                command=lambda name=song: self.confirm_song(name, self.settings),
                 font=("Arial", 14, "bold"),
                 bg="#4CAF50",
                 fg="white",
@@ -129,13 +204,13 @@ class SongSelect:
             btn.place(x=800//2 - 150, y=100 + i * 50)
             self.song_buttons.append(btn)
 
-    def confirm_song(self, song, volume_var):
+    def confirm_song(self, song, settings):
         answer = messagebox.askyesno("確認", f"是否要遊玩「{song}」？")
         if answer:
             beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
             song_path = os.path.join("assets", "song", f"{song}.mp3")
             self.cleanup()
-            self.on_song_selected(song_path, beatmap_path, volume_var)
+            self.on_song_selected(song_path, beatmap_path, self.settings)
 
     def cleanup(self):
         self.canvas.destroy()
@@ -143,8 +218,9 @@ class SongSelect:
             btn.destroy()
 
 class TaikoGame:
-    def __init__(self, root, song_path, beatmap_path, volume_var):
+    def __init__(self, root, song_path, beatmap_path, settings):
         self.root = root
+        self.settings = settings
         self.root.title("太鼓達人加強版")
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='white')
         self.canvas.pack()
@@ -158,6 +234,10 @@ class TaikoGame:
         # 分數與 combo
         self.score = 0
         self.combo = 0
+        
+        # 暫停按鈕
+        self.back_btn = tk.Button(root, text="暫停", font=("Arial", 12), command=self.toggle_pause)
+        self.back_btn.place(x=750, y=10)
 
         # 顯示文字
         self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16))
@@ -173,9 +253,8 @@ class TaikoGame:
         self.chart = []
 
         # 綁定鍵盤
-        self.root.bind("<KeyPress-z>", self.hit_red)
-        self.root.bind("<KeyPress-x>", self.hit_blue)
-
+        self.root.bind(self.settings.red_button, self.hit_red)
+        self.root.bind(self.settings.blue_button, self.hit_blue)
 
         self.paused = False
         self.overlay = None
@@ -197,7 +276,7 @@ class TaikoGame:
             sliderrelief='flat',
             highlightthickness=0
         )
-        self.volume_slider.set(volume_var)
+        self.volume_slider.set(settings.volume)
         self.volume_slider.place_forget()
 
         self.root.bind("<KeyPress-p>", self.toggle_pause_key)
@@ -207,7 +286,7 @@ class TaikoGame:
         self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, **btn_style)
 
 
-        self.set_volume(volume_var)
+        self.set_volume(settings.volume)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
@@ -217,7 +296,7 @@ class TaikoGame:
         self.hide_pause_overlay()
         pygame.mixer.music.stop()
         self.canvas.destroy()
-        MainMenu(self.root)
+        MainMenu(self.root, self.settings)
 
     def restart_game(self):
         self.hide_pause_overlay()
@@ -247,6 +326,7 @@ class TaikoGame:
 
     def set_volume(self, val):
         volume = int(val) / 100
+        self.settings.volume = int(val)
         pygame.mixer.music.set_volume(volume)
         self.hit_sound_red.set_volume(volume)
         self.hit_sound_blue.set_volume(volume)
@@ -293,7 +373,7 @@ class TaikoGame:
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
-        pygame.mixer.music.set_volume(self.volume_slider.get() / 100)
+        pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
 
     def schedule_drums(self):
@@ -362,6 +442,7 @@ class TaikoGame:
 # 主程式
 if __name__ == '__main__':
     root = tk.Tk()
-    menu = MainMenu(root)
+    settings = GameSettings()
+    menu = MainMenu(root, settings)
     root.mainloop()
 
