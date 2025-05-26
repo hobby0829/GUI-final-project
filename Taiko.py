@@ -16,6 +16,7 @@ HIT_WAV = "assets/sound/hit.wav"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 BGM_MENU = "assets/song/test.mp3"
+SCORE_LIST = "assets/score.json"
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -214,11 +215,21 @@ class SongSelect:
     def confirm_song(self, song, settings):
         self.clear_info_panel()
 
+        # 嘗試讀取該首歌的最高分數
+        try:
+            with open(SCORE_LIST, "r", encoding="utf-8") as f:
+                scores = json.load(f)
+                score_entry = next((s for s in scores if s["song"] == song), None)
+                high_score = score_entry["score"] if score_entry else 0
+        except (FileNotFoundError, json.JSONDecodeError):
+            high_score = 0  # 檔案不存在或格式錯誤，預設為 0 分
+
         # 顯示資訊
-        song_info = {'song':song, 'difficulty':'未知'}
+        song_info = {'song':song, 'difficulty':'未知', 'score': high_score}
         
         label = tk.Label(self.root, text=f"歌曲名稱: {song_info['song']}\n"
                         + f"難度: {song_info['difficulty']}\n"
+                        + f"最高分數: {song_info['score']}\n"
                         , font=("Arial", 12), bg="#1e1e1e", fg="white", justify="left")
         
         label.place(x=WIDTH//2 + 100, y=HEIGHT//4)
@@ -246,6 +257,7 @@ class SongSelect:
 
     def cleanup(self):
         self.canvas.destroy()
+        self.back_btn.destroy()
         for btn in self.song_buttons:
             btn.destroy()
     
@@ -257,7 +269,8 @@ class TaikoGame:
         self.root = root
         self.settings = settings
         self.root.title("太鼓達人加強版")
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='white')
+        self.song_name = os.path.splitext(os.path.basename(song_path))[0]
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
 
         # 初始化 pygame 音效
@@ -276,8 +289,8 @@ class TaikoGame:
         self.back_btn.place(x=750, y=10)
 
         # 顯示文字
-        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16))
-        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16))
+        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
+        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
         self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
 
         # 判定線
@@ -398,7 +411,30 @@ class TaikoGame:
     def check_game_over(self):
         if not self.chart and not self.drums:
             pygame.mixer.music.stop()
-            self.canvas.create_text(WIDTH//2, HEIGHT//2, text="遊戲結束！", font=("Arial", 32), fill="black")
+            self.canvas.create_text(WIDTH // 2, HEIGHT // 2, text="遊戲結束！", font=("Arial", 32), fill="white")
+
+            # 嘗試載入現有的分數資料
+            try:
+                with open(SCORE_LIST, "r", encoding="utf-8") as f:
+                    scores = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                scores = []
+
+            # 檢查當前歌曲是否已在紀錄中
+            song_found = False
+            for entry in scores:
+                if entry["song"] == self.song_name:  # self.song_name 必須在 game_start 中儲存
+                    song_found = True
+                    if self.score > entry["score"]:
+                        entry["score"] = self.score  # 更新高分
+                    break
+
+            if not song_found:
+                scores.append({"song": self.song_name, "score": self.score})  # 新增新歌曲記錄
+
+            # 寫回檔案
+            with open(SCORE_LIST, "w", encoding="utf-8") as f:
+                json.dump(scores, f, ensure_ascii=False, indent=4)
             
 
     def load_score(self, file):
@@ -425,26 +461,81 @@ class TaikoGame:
         self.root.after(50, self.schedule_drums)
 
     def spawn_drum(self, drum_type):
-        color = 'red' if drum_type == 'red' else 'blue'
         y = HEIGHT // 2
-        drum = {
-            'id': self.canvas.create_oval(WIDTH, y - 30, WIDTH + 60, y + 30, fill=color),
+        width = 20
+        height = 80
+        border_color = "#FFD700"  # 金黃色
+        gradient_colors = self.get_gradient_colors(drum_type, steps=10)
+
+        drum_ids = []
+
+        # 畫金黃色邊框
+        border_id = self.canvas.create_rectangle(
+            WIDTH, y - height // 2, WIDTH + width, y + height // 2,
+            outline=border_color, width=2, fill=""
+        )
+        drum_ids.append(border_id)
+
+        # 畫漸層
+        step_height = height // len(gradient_colors)
+        for i, color in enumerate(gradient_colors):
+            step_y1 = y - height // 2 + i * step_height
+            step_y2 = step_y1 + step_height
+            rect_id = self.canvas.create_rectangle(
+                WIDTH + 2, step_y1, WIDTH + width - 2, step_y2,
+                outline="", fill=color
+            )
+            drum_ids.append(rect_id)
+
+        self.drums.append({
+            'id': drum_ids,
             'type': drum_type,
-            'x': WIDTH
-        }
-        self.drums.append(drum)
+            'x': WIDTH,
+            'width': width,
+            'height': height
+        })
+    
+    def get_gradient_colors(self, drum_type, steps=10):
+        if drum_type == "red":
+            start = (255, 100, 100)
+            end = (255, 0, 0)
+        else:  # blue
+            start = (100, 100, 255)
+            end = (0, 0, 255)
+
+        colors = []
+        for i in range(steps):
+            r = int(start[0] + (end[0] - start[0]) * i / (steps - 1))
+            g = int(start[1] + (end[1] - start[1]) * i / (steps - 1))
+            b = int(start[2] + (end[2] - start[2]) * i / (steps - 1))
+            colors.append(f'#{r:02x}{g:02x}{b:02x}')
+        return colors
 
     def move_drums(self):
         if self.paused:
             self.root.after(30, self.move_drums)
             return
-         
+
         for drum in self.drums:
             drum['x'] -= DRUM_SPEED
-            self.canvas.coords(drum['id'], drum['x'], HEIGHT // 2 - 30, drum['x'] + 60, HEIGHT // 2 + 30)
-        self.drums = [d for d in self.drums if d['x'] + 60 > 0]
+            x = drum['x']
+            width = drum['width']
+            height = drum['height']
+            steps = len(drum['id']) - 1
+            step_height = height // steps
+
+            for i, item_id in enumerate(drum['id']):
+                if i == 0:  # 外框
+                    self.canvas.coords(item_id, x, HEIGHT // 2 - height // 2, x + width, HEIGHT // 2 + height // 2)
+                else:  # 漸層
+                    y1 = HEIGHT // 2 - height // 2 + (i - 1) * step_height
+                    y2 = y1 + step_height
+                    self.canvas.coords(item_id, x + 2, y1, x + width - 2, y2)
+
+        self.drums = [d for d in self.drums if d['x'] + d['width'] > 0]
         self.root.after(30, self.move_drums)
         self.check_game_over()
+
 
     def hit_red(self, event):
         self.play_hit_sound('red')
@@ -459,7 +550,8 @@ class TaikoGame:
             if drum['type'] == hit_type and abs(drum['x'] - JUDGE_LINE) < HIT_RANGE:
                 
                 self.canvas.itemconfig(self.judge_text, text='Perfect!')
-                self.canvas.delete(drum['id'])
+                for item_id in drum['id']:
+                    self.canvas.delete(item_id)
                 self.drums.remove(drum)
                 self.combo += 1
                 self.score += 100
