@@ -164,6 +164,7 @@ class SongSelect:
         self.beatmap_path = ''
         self.song_path = ''
         self.default_song = ''
+        self.bgm = ''
 
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
         self.canvas.pack()
@@ -176,6 +177,11 @@ class SongSelect:
         self.back_btn.place(x=10, y=10)
 
         self.load_song_list(SONG_LIST)  # 讀取歌曲資料夾名稱
+
+    def play_bgm(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.set_volume(self.settings.volume / 100)
+        pygame.mixer.music.play()
 
     def return_to_main_menu(self):
         self.canvas.destroy()
@@ -224,6 +230,8 @@ class SongSelect:
         except (FileNotFoundError, json.JSONDecodeError):
             high_score = 0  # 檔案不存在或格式錯誤，預設為 0 分
 
+        self.bgm = os.path.join(SONG_LIST, f'{song}.mp3')
+        self.play_bgm()
         # 顯示資訊
         song_info = {'song':song, 'difficulty':'未知', 'score': high_score}
         
