@@ -301,6 +301,9 @@ class TaikoGame:
         self.start_time = None
         self.chart = []
 
+        self.drum_timer_id = None
+        self.move_timer_id = None
+
         # 綁定鍵盤
         self.root.bind(self.settings.red_button, self.hit_red)
         self.root.bind(self.settings.blue_button, self.hit_blue)
@@ -358,6 +361,8 @@ class TaikoGame:
         self.update_score()
         for drum in self.drums:
             self.canvas.delete(drum['id'])
+        self.root.after_cancel(self.drum_timer_id)
+        self.root.after_cancel(self.move_timer_id)
         self.drums.clear()
         self.cleanup()
         TaikoGame(self.root, song_path, beatmap_path, settings)
@@ -411,6 +416,8 @@ class TaikoGame:
     def check_game_over(self):
         if not self.chart and not self.drums:
             pygame.mixer.music.stop()
+            self.root.after_cancel(self.drum_timer_id)
+            self.root.after_cancel(self.move_timer_id)
             self.canvas.create_text(WIDTH // 2, HEIGHT // 2, text="遊戲結束！", font=("Arial", 32), fill="white")
 
             # 嘗試載入現有的分數資料
@@ -453,12 +460,16 @@ class TaikoGame:
         pygame.mixer.music.play()
 
     def schedule_drums(self):
+        # 防止畫面已被銷毀仍執行排程
+        if not self.canvas.winfo_exists():
+            return
+        
         now = int(time.time() * 1000) - self.start_time
         for note in self.chart:
             if note['time'] <= now + 200:  # 時間快到就生成
                 self.spawn_drum(note['type'])
                 self.chart.remove(note)
-        self.root.after(50, self.schedule_drums)
+        self.drum_timer_id = self.root.after(50, self.schedule_drums)
 
     def spawn_drum(self, drum_type):
         y = HEIGHT // 2
@@ -512,6 +523,10 @@ class TaikoGame:
         return colors
 
     def move_drums(self):
+        # 防止畫面已被銷毀仍執行排程
+        if not self.canvas.winfo_exists():
+            return
+        
         if self.paused:
             self.root.after(30, self.move_drums)
             return
@@ -533,7 +548,7 @@ class TaikoGame:
                     self.canvas.coords(item_id, x + 2, y1, x + width - 2, y2)
 
         self.drums = [d for d in self.drums if d['x'] + d['width'] > 0]
-        self.root.after(30, self.move_drums)
+        self.move_timer_id = self.root.after(30, self.move_drums)
         self.check_game_over()
 
 
