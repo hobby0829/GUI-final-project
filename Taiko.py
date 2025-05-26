@@ -59,10 +59,8 @@ class MainMenu:
         self.start_btn.place_forget()
         self.quit_btn.place_forget()
         self.canvas.destroy()
-        SongSelect(self.root, self.start_taiko_game, self.settings)
+        SongSelect(self.root, self.settings)
 
-    def start_taiko_game(self, song_path, beatmap_path, settings):
-        TaikoGame(self.root, song_path, beatmap_path, settings)
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
@@ -156,12 +154,17 @@ class MainMenu:
         tk.Button(options_window, text="關閉選單", font=("Arial", 12), command=options_window.destroy).pack(pady=20)
     
 class SongSelect:
-    def __init__(self, root, on_song_selected, settings):
+    def __init__(self, root, settings):
         self.root = root
-        self.on_song_selected = on_song_selected
+        
         self.settings = settings
+        self.confirmed = False  # 初始值
+        self.info_widgets = []
+        self.beatmap_path = ''
+        self.song_path = ''
+        self.default_song = ''
 
-        self.canvas = tk.Canvas(root, width=800, height=400, bg='#1e1e1e')
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
         self.canvas.pack()
 
         self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
@@ -188,6 +191,8 @@ class SongSelect:
         ]
         
         for i, song in enumerate(songs):
+            if i == 0:
+                self.default_song = song
             btn = tk.Button(
                 self.root,
                 text=song,
@@ -198,24 +203,54 @@ class SongSelect:
                 activebackground="#388E3C",
                 relief="flat",
                 bd=0,
-                width=30,
+                width=20,
                 cursor="hand2"
             )
-            btn.place(x=800//2 - 150, y=100 + i * 50)
+            btn.place(x=WIDTH//4, y=HEIGHT//4 + i * 50)
             self.song_buttons.append(btn)
+        self.confirm_song(self.default_song, self.settings)
+    
 
     def confirm_song(self, song, settings):
-        answer = messagebox.askyesno("確認", f"是否要遊玩「{song}」？")
-        if answer:
-            beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
-            song_path = os.path.join("assets", "song", f"{song}.mp3")
-            self.cleanup()
-            self.on_song_selected(song_path, beatmap_path, self.settings)
+        self.clear_info_panel()
+
+        # 顯示資訊
+        song_info = {'song':song, 'difficulty':'未知'}
+        
+        label = tk.Label(self.root, text=f"歌曲名稱: {song_info['song']}\n"
+                        + f"難度: {song_info['difficulty']}\n"
+                        , font=("Arial", 12), bg="#1e1e1e", fg="white", justify="left")
+        
+        label.place(x=WIDTH//2 + 100, y=HEIGHT//4)
+        self.info_widgets.append(label)
+
+        # 確認按鈕
+        self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
+        self.song_path = os.path.join("assets", "song", f"{song}.mp3")
+        confirm_btn = tk.Button(self.root, text="開始遊玩", font=("Arial", 12), bg="#2196F3", fg="white",
+                                command=lambda song=song:self.game_start(song))
+        
+        confirm_btn.place(x=800//2 + 100, y=200)
+        self.info_widgets.append(confirm_btn)
+
+    def game_start(self, song):
+        self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
+        self.song_path = os.path.join("assets", "song", f"{song}.mp3")
+        self.cleanup()
+        self.start_taiko_game(self.song_path, self.beatmap_path, self.settings)
+
+    def clear_info_panel(self):
+        for widget in self.info_widgets:
+            widget.destroy()
+        self.info_widgets.clear()
 
     def cleanup(self):
         self.canvas.destroy()
         for btn in self.song_buttons:
             btn.destroy()
+    
+    def start_taiko_game(self, song_path, beatmap_path, settings):
+        TaikoGame(self.root, song_path, beatmap_path, settings)
 
 class TaikoGame:
     def __init__(self, root, song_path, beatmap_path, settings):
@@ -230,6 +265,7 @@ class TaikoGame:
         self.hit_sound_red = pygame.mixer.Sound(HIT_WAV)
         self.hit_sound_blue = pygame.mixer.Sound(HIT_WAV)
         self.bgm = song_path
+        self.beatmap = beatmap_path
 
         # 分數與 combo
         self.score = 0
@@ -282,7 +318,9 @@ class TaikoGame:
         self.root.bind("<KeyPress-p>", self.toggle_pause_key)
 
         self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, **btn_style)
-        self.btn_restart = tk.Button(root, text="重新開始(R)", command=self.restart_game, **btn_style)
+        self.btn_restart = tk.Button(root, text="重新開始(R)", 
+                                     command=lambda beatmap_path = beatmap_path, song_path = song_path:                                                                        
+                                     self.restart_game(song_path, beatmap_path), **btn_style)
         self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, **btn_style)
 
 
@@ -298,7 +336,7 @@ class TaikoGame:
         self.canvas.destroy()
         MainMenu(self.root, self.settings)
 
-    def restart_game(self):
+    def restart_game(self, song_path, beatmap_path):
         self.hide_pause_overlay()
         self.paused = False
         pygame.mixer.music.stop()
@@ -308,8 +346,10 @@ class TaikoGame:
         for drum in self.drums:
             self.canvas.delete(drum['id'])
         self.drums.clear()
-        self.load_score(BEAT_MAP)
-        self.start_game()
+        self.cleanup()
+        TaikoGame(self.root, song_path, beatmap_path, settings)
+        
+        
 
     def toggle_pause(self):
         self.toggle_pause_key(event=None)
@@ -438,6 +478,10 @@ class TaikoGame:
     def update_score(self):
         self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
         self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
+
+    def cleanup(self):
+        self.canvas.destroy()
+        
 
 # 主程式
 if __name__ == '__main__':
