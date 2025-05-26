@@ -6,5 +6,9 @@
     {
         "song": "test",
         "score": 1300
+    },
+    {
+        "song": "Ave Mujica",
+        "score": 1500
     }
 ]

@@ -15,19 +15,19 @@ HIT_RANGE = 30
 HIT_WAV = "assets/sound/hit.wav"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
-BGM_MENU = "assets/song/test.mp3"
+files = os.listdir(SONG_LIST)
+BGM_MENU = os.path.join(SONG_LIST, files[0])
 SCORE_LIST = "assets/score.json"
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
-    "bg": "#f0a500",
     "fg": "white",
     "activebackground": "#d48806",
     "activeforeground": "white",
     "bd": 0,
     "relief": "flat",
     "width": 12,
-    "height": 2,
+    "height": 0,
     "cursor": "hand2"
 }
 
@@ -256,6 +256,7 @@ class SongSelect:
         self.info_widgets.clear()
 
     def cleanup(self):
+        self.clear_info_panel()
         self.canvas.destroy()
         self.back_btn.destroy()
         for btn in self.song_buttons:
@@ -333,11 +334,11 @@ class TaikoGame:
 
         self.root.bind("<KeyPress-p>", self.toggle_pause_key)
 
-        self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, **btn_style)
+        self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, bg="#2196F3", **btn_style)
         self.btn_restart = tk.Button(root, text="重新開始(R)", 
                                      command=lambda beatmap_path = beatmap_path, song_path = song_path:                                                                        
-                                     self.restart_game(song_path, beatmap_path), **btn_style)
-        self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, **btn_style)
+                                     self.restart_game(song_path, beatmap_path), bg="#4CAF50", **btn_style)
+        self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, bg="#F44336", **btn_style)
 
 
         self.set_volume(settings.volume)
@@ -399,8 +400,8 @@ class TaikoGame:
         self.volume_slider.place(x=WIDTH//2 - 100, y=HEIGHT//2 - 20)
 
         self.btn_menu.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 40)
-        self.btn_restart.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 80)
-        self.btn_quit.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 120)
+        self.btn_restart.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 90)
+        self.btn_quit.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 140)
     
     def hide_pause_overlay(self):
         if self.overlay:
@@ -442,6 +443,10 @@ class TaikoGame:
             # 寫回檔案
             with open(SCORE_LIST, "w", encoding="utf-8") as f:
                 json.dump(scores, f, ensure_ascii=False, indent=4)
+
+            self.drums.clear()
+            self.cleanup()
+            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings)
             
 
     def load_score(self, file):
@@ -589,7 +594,46 @@ class TaikoGame:
     def cleanup(self):
         self.canvas.destroy()
         
+class Score_Summary:
+    def __init__(self, root, score, combo, song_path, beatmap_path, settings):
+        self.root = root
+        self.score = score
+        self.combo = combo
+        self.song_path = song_path
+        self.beatmap_path = beatmap_path
+        self.settings = settings
 
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
+        self.canvas.pack()
+
+        self.canvas.create_text(WIDTH // 2, 80, text="遊戲結束！", font=("Arial", 32, "bold"), fill="white")
+        self.canvas.create_text(WIDTH // 2, 150, text=f"總分：{self.score}", font=("Arial", 24), fill="yellow")
+        self.canvas.create_text(WIDTH // 2, 200, text=f"最高連擊：{self.combo}", font=("Arial", 24), fill="lightblue")
+
+        self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, font=("Arial", 14), bg="#2196F3", fg="white", width=15)
+        self.btn_restart = tk.Button(root, text="重新開始", command=self.restart_game, font=("Arial", 14), bg="#4CAF50", fg="white", width=15)
+        self.btn_exit = tk.Button(root, text="離開遊戲", command=root.quit, font=("Arial", 14), bg="#F44336", fg="white", width=15)
+
+        self.btn_menu.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 30)
+        self.btn_restart.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 80)
+        self.btn_exit.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 130)
+
+    def back_to_menu(self):
+        self.destroy()
+        MainMenu(self.root, self.settings)
+
+    def restart_game(self):
+        self.destroy()
+        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings)
+
+    def destroy(self):
+        self.canvas.destroy()
+        self.btn_menu.destroy()
+        self.btn_restart.destroy()
+        self.btn_exit.destroy()
+
+
+    
 # 主程式
 if __name__ == '__main__':
     root = tk.Tk()
