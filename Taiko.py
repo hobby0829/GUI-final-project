@@ -5,6 +5,9 @@ import json
 import time
 import pygame
 import threading
+from moviepy.editor import VideoFileClip
+from PIL import Image, ImageTk
+import numpy as np
 
 WIDTH = 800
 HEIGHT = 400
@@ -18,6 +21,7 @@ SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
 BGM_MENU = os.path.join(SONG_LIST, files[0])
 SCORE_LIST = "assets/score.json"
+MV = "assets/MV"
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -165,6 +169,7 @@ class SongSelect:
         self.song_path = ''
         self.default_song = ''
         self.bgm = ''
+        self.mv_able = False
 
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
         self.canvas.pack()
@@ -249,14 +254,31 @@ class SongSelect:
         confirm_btn = tk.Button(self.root, text="開始遊玩", font=("Arial", 12), bg="#2196F3", fg="white",
                                 command=lambda song=song:self.game_start(song))
         
+        filename = f"{song}.mp4"
+        filepath = os.path.join(MV, filename)
+        if os.path.isfile(filepath):
+            switch_MV_btn = tk.Button(self.root, text="使用MV", font=("Arial", 12), bg="#2196F3", fg="white",)
+            switch_MV_btn.config(command=lambda btn=switch_MV_btn: self.switch_MV(btn))
+            switch_MV_btn.place(x=800//2 + 200, y=200)
+            self.info_widgets.append(switch_MV_btn)
+            
+        
         confirm_btn.place(x=800//2 + 100, y=200)
         self.info_widgets.append(confirm_btn)
+
+    def switch_MV(self, btn):
+        if self.mv_able == False:
+            self.mv_able = True
+            btn.config(text='不使用MV')
+        else:
+            self.mv_able = False
+            btn.config(text='使用MV')
 
     def game_start(self, song):
         self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
         self.song_path = os.path.join("assets", "song", f"{song}.mp3")
         self.cleanup()
-        self.start_taiko_game(self.song_path, self.beatmap_path, self.settings)
+        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
 
     def clear_info_panel(self):
         for widget in self.info_widgets:
@@ -269,12 +291,9 @@ class SongSelect:
         self.back_btn.destroy()
         for btn in self.song_buttons:
             btn.destroy()
-    
-    def start_taiko_game(self, song_path, beatmap_path, settings):
-        TaikoGame(self.root, song_path, beatmap_path, settings)
 
 class TaikoGame:
-    def __init__(self, root, song_path, beatmap_path, settings):
+    def __init__(self, root, song_path, beatmap_path, settings, is_use_mv=False):
         self.root = root
         self.settings = settings
         self.root.title("太鼓達人加強版")
@@ -308,6 +327,8 @@ class TaikoGame:
         # 鼓列表與開始時間
         self.drums = []
         self.start_time = None
+        self.pause_time = None
+        self.total_pause_duration = 0
         self.chart = []
 
         self.drum_timer_id = None
@@ -348,12 +369,55 @@ class TaikoGame:
                                      self.restart_game(song_path, beatmap_path), bg="#4CAF50", **btn_style)
         self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, bg="#F44336", **btn_style)
 
+        self.is_use_mv = is_use_mv
+        self.update_mv_timer_id = None  # 儲存 after 的 id
+        self.running = False
+        if is_use_mv:
+            # 載入影片
+            self.video_path = os.path.join(MV, self.song_name + '.mp4')
+            self.video = VideoFileClip(self.video_path).resize((800, 400))
+            self.fps = self.video.fps
+            self.duration = self.video.duration
+            # 初始化播放時間
+            self.mv_start_time = None
+            self.image_on_canvas = None
+            self.running = True
 
         self.set_volume(settings.volume)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
-        self.start_game()
+        self.start_game(is_use_mv)
+
+    def update_mv_frame(self):
+        if not self.running or self.paused:
+            return
+
+        # ✅ 新增這行防止已被刪除的 canvas 被更新
+        if not self.canvas.winfo_exists():
+            return
+    
+        # 音樂播放時間
+        current_time = time.time() - self.mv_start_time
+        if current_time >= self.duration:
+            self.running = False
+            return
+
+        # 抓對應時間的影片畫面
+        frame = self.video.get_frame(current_time)
+        image = Image.fromarray(np.uint8(frame))
+        photo = ImageTk.PhotoImage(image)
+
+        # 更新 Canvas
+        if self.image_on_canvas is None:
+            self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
+            self.canvas.tag_lower(self.image_on_canvas)  # ★ 關鍵：讓 MV 在最下層
+        else:
+            self.canvas.itemconfig(self.image_on_canvas, image=photo)
+        self.canvas.image = photo  # 防止垃圾回收
+
+        # 安排下一幀（根據 FPS 控制速度）
+        self.update_mv_timer_id = self.root.after(int(1000 / self.fps), self.update_mv_frame)
 
     def back_to_menu(self):
         self.hide_pause_overlay()
@@ -374,21 +438,28 @@ class TaikoGame:
         self.root.after_cancel(self.move_timer_id)
         self.drums.clear()
         self.cleanup()
-        TaikoGame(self.root, song_path, beatmap_path, settings)
+        TaikoGame(self.root, song_path, beatmap_path, self.settings, self.is_use_mv)
         
         
 
     def toggle_pause(self):
         self.toggle_pause_key(event=None)
 
-    def toggle_pause_key(self, event):
+    def toggle_pause_key(self, event=None):
         if not self.paused:
             self.paused = True
             pygame.mixer.music.pause()
+            self.pause_time = time.time()
             self.show_pause_overlay()
         else:
             self.paused = False
             pygame.mixer.music.unpause()
+            # 調整 MV 開始時間，避免播放錯誤時間
+            pause_duration = time.time() - self.pause_time
+            self.total_pause_duration += pause_duration
+            if self.is_use_mv:
+                self.mv_start_time += pause_duration
+                self.update_mv_frame()  # 重新啟動畫面更新
             self.hide_pause_overlay()
 
     def set_volume(self, val):
@@ -461,9 +532,12 @@ class TaikoGame:
         with open(file, 'r') as f:
             self.chart = json.load(f)
 
-    def start_game(self):
-        self.start_time = int(time.time() * 1000)
+    def start_game(self, is_use_mv):
+        self.start_time = int(time.time())
         threading.Thread(target=self.play_bgm).start()
+        if is_use_mv:
+            self.mv_start_time = time.time()
+            self.update_mv_frame()
         self.schedule_drums()
         self.move_drums()
 
@@ -477,7 +551,13 @@ class TaikoGame:
         if not self.canvas.winfo_exists():
             return
         
-        now = int(time.time() * 1000) - self.start_time
+        if self.paused:
+            self.drum_timer_id = self.root.after(50, self.schedule_drums)
+            return
+        
+        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        next_note_time = self.chart[0]['time'] if self.chart else None
+        #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
             if note['time'] <= now + 200:  # 時間快到就生成
                 self.spawn_drum(note['type'])
@@ -574,9 +654,9 @@ class TaikoGame:
         self.check_hit('blue')
 
     def check_hit(self, hit_type):
-        for drum in self.drums:
+        for i, drum in enumerate(self.drums):
             if drum['type'] == hit_type and abs(drum['x'] - JUDGE_LINE) < HIT_RANGE:
-                
+
                 self.canvas.itemconfig(self.judge_text, text='Perfect!')
                 for item_id in drum['id']:
                     self.canvas.delete(item_id)
