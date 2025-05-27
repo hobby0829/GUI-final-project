@@ -5,7 +5,7 @@ import json
 import time
 import pygame
 import threading
-from moviepy.editor import VideoFileClip
+import cv2
 from PIL import Image, ImageTk
 import numpy as np
 
@@ -375,12 +375,13 @@ class TaikoGame:
         if is_use_mv:
             # 載入影片
             self.video_path = os.path.join(MV, self.song_name + '.mp4')
-            self.video = VideoFileClip(self.video_path).resize((800, 400))
-            self.fps = self.video.fps
-            self.duration = self.video.duration
-            # 初始化播放時間
-            self.mv_start_time = None
+            self.cap = cv2.VideoCapture(self.video_path)
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+            self.frame_interval = int(1000 / self.fps)
+            self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             self.image_on_canvas = None
+            self.mv_start_time = None
             self.running = True
 
         self.set_volume(settings.volume)
@@ -390,39 +391,33 @@ class TaikoGame:
         self.start_game(is_use_mv)
 
     def update_mv_frame(self):
-        if not self.running or self.paused:
+        if not self.running or self.paused or not self.canvas.winfo_exists():
             return
 
-        # ✅ 新增這行防止已被刪除的 canvas 被更新
-        if not self.canvas.winfo_exists():
-            return
-    
-        # 音樂播放時間
-        current_time = time.time() - self.mv_start_time
-        if current_time >= self.duration:
+        ret, frame = self.cap.read()
+        if not ret:
             self.running = False
+            self.cap.release()
             return
 
-        # 抓對應時間的影片畫面
-        frame = self.video.get_frame(current_time)
-        image = Image.fromarray(np.uint8(frame))
+        frame = cv2.resize(frame, (800, 400))  # 調整畫面大小
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = Image.fromarray(frame)
         photo = ImageTk.PhotoImage(image)
 
-        # 更新 Canvas
         if self.image_on_canvas is None:
             self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
-            self.canvas.tag_lower(self.image_on_canvas)  # ★ 關鍵：讓 MV 在最下層
+            self.canvas.tag_lower(self.image_on_canvas)
         else:
             self.canvas.itemconfig(self.image_on_canvas, image=photo)
-        self.canvas.image = photo  # 防止垃圾回收
+        self.canvas.image = photo
 
-        # 安排下一幀（根據 FPS 控制速度）
-        self.update_mv_timer_id = self.root.after(int(1000 / self.fps), self.update_mv_frame)
+        self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
 
     def back_to_menu(self):
         self.hide_pause_overlay()
         pygame.mixer.music.stop()
-        self.video.close()
+        self.cap.release()
         self.canvas.destroy()
         MainMenu(self.root, self.settings)
 
@@ -524,7 +519,7 @@ class TaikoGame:
                 json.dump(scores, f, ensure_ascii=False, indent=4)
 
             self.drums.clear()
-            self.video.close()
+            self.cap.release()
             self.cleanup()
             Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
             
