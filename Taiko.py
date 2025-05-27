@@ -11,9 +11,9 @@ import numpy as np
 
 WIDTH = 800
 HEIGHT = 400
-DRUM_SPEED = 5
+DRUM_SPEED = 9
 JUDGE_LINE = 100
-HIT_RANGE = 30
+HIT_RANGE = 50
 
 HIT_WAV_RED = "assets/sound/hit_red.wav"
 HIT_WAV_BLUE = "assets/sound/hit_blue.mp3"
@@ -478,12 +478,32 @@ class TaikoGame:
             self.running = True
             self.current_frame = 0
 
+
+        self.time_text_id = None  # 這是用來記錄畫出來的文字的 ID
+        self.offset = 1.6
         self.set_volume(settings.volume)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
         self.start_game(is_use_mv)
-    
+
+    def update_time_text(self):
+        now = pygame.mixer.music.get_pos() / 1000  # 換成秒
+        display_time = f"{int(now // 60):02}:{int(now % 60):02}.{int((now * 1000) % 1000):03}"
+
+        if self.time_text_id is not None:
+            # 更新現有文字
+            self.canvas.itemconfig(self.time_text_id, text=f"音樂時間：{display_time}")
+        else:
+            # 第一次畫出時間文字
+            self.time_text_id = self.canvas.create_text(
+                100, 30, text=f"音樂時間：{display_time}",
+                fill="white", font=("Arial", 16, "bold"), anchor="w"
+            )
+
+        # 每 1000 毫秒（1 秒）後再次呼叫自己
+        self.canvas.after(1000, self.update_time_text)
+
     def update_mv_frame(self):
         if not self.running or self.paused or not self.canvas.winfo_exists():
             return
@@ -516,7 +536,6 @@ class TaikoGame:
 
         self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
 
-
     def back_to_menu(self):
         self.hide_pause_overlay()
         pygame.mixer.music.stop()
@@ -540,7 +559,6 @@ class TaikoGame:
         self.cleanup()
         TaikoGame(self.root, song_path, beatmap_path, self.settings, self.is_use_mv)
         
-
     def toggle_pause(self):
         self.toggle_pause_key(event=None)
 
@@ -628,18 +646,19 @@ class TaikoGame:
             self.cleanup()
             Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
             
-
     def load_score(self, file):
         with open(file, 'r') as f:
             self.chart = json.load(f)
 
     def start_game(self, is_use_mv):
         self.start_time = int(time.time())
+        self.schedule_drums()
+        
         threading.Thread(target=self.play_bgm).start()
+        self.update_time_text()
         if is_use_mv:
             self.mv_start_time = time.time()
             self.update_mv_frame()
-        self.schedule_drums()
         self.move_drums()
 
     def play_bgm(self):
@@ -656,12 +675,12 @@ class TaikoGame:
             self.drum_timer_id = self.root.after(50, self.schedule_drums)
             return
         
-        #now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
-        now = pygame.mixer.music.get_pos()
+        #now = int((time.time() - self.total_pause_duration - self.start_time + self.offset) * 1000)
+        now = pygame.mixer.music.get_pos() + self.offset * 1000
         next_note_time = self.chart[0]['time'] if self.chart else None
         #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
-            if note['time'] <= now + 200:  # 時間快到就生成
+            if note['time'] <= now + 1000:  # 時間快到就生成
                 self.spawn_drum(note['type'])
                 self.chart.remove(note)
         self.drum_timer_id = self.root.after(50, self.schedule_drums)
@@ -756,20 +775,28 @@ class TaikoGame:
         self.check_hit('blue')
 
     def check_hit(self, hit_type):
-        for i, drum in enumerate(self.drums):
-            if drum['type'] == hit_type and abs(drum['x'] - JUDGE_LINE) < HIT_RANGE:
+        best_drum = None
+        best_distance = float('inf')
 
-                self.canvas.itemconfig(self.judge_text, text='Perfect!')
-                for item_id in drum['id']:
-                    self.canvas.delete(item_id)
-                self.drums.remove(drum)
-                self.combo += 1
-                self.score += 100
-                self.update_score()
-                return
-        self.combo = 0
-        self.canvas.itemconfig(self.judge_text, text='Miss')
-        self.update_score()
+        for drum in self.drums:
+            if drum['type'] == hit_type:
+                distance = abs(drum['x'] - JUDGE_LINE)
+                if distance < HIT_RANGE and distance < best_distance:
+                    best_drum = drum
+                    best_distance = distance
+
+        if best_drum:
+            self.canvas.itemconfig(self.judge_text, text='Perfect!')
+            for item_id in best_drum['id']:
+                self.canvas.delete(item_id)
+            self.drums.remove(best_drum)
+            self.combo += 1
+            self.score += 100
+            self.update_score()
+        else:
+            self.combo = 0
+            self.canvas.itemconfig(self.judge_text, text='Miss')
+            self.update_score()
 
     def play_hit_sound(self, drum_type):
         if drum_type == 'red':
