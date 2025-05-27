@@ -15,7 +15,8 @@ DRUM_SPEED = 5
 JUDGE_LINE = 100
 HIT_RANGE = 30
 
-HIT_WAV = "assets/sound/hit.wav"
+HIT_WAV_RED = "assets/sound/hit_red.wav"
+HIT_WAV_BLUE = "assets/sound/hit_blue.mp3"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
@@ -395,8 +396,8 @@ class TaikoGame:
 
         # 初始化 pygame 音效
         pygame.mixer.init()
-        self.hit_sound_red = pygame.mixer.Sound(HIT_WAV)
-        self.hit_sound_blue = pygame.mixer.Sound(HIT_WAV)
+        self.hit_sound_red = pygame.mixer.Sound(HIT_WAV_RED)
+        self.hit_sound_blue = pygame.mixer.Sound(HIT_WAV_BLUE)
         self.bgm = song_path
         self.beatmap = beatmap_path
 
@@ -475,36 +476,46 @@ class TaikoGame:
             self.image_on_canvas = None
             self.mv_start_time = None
             self.running = True
+            self.current_frame = 0
 
         self.set_volume(settings.volume)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
         self.start_game(is_use_mv)
-
+    
     def update_mv_frame(self):
         if not self.running or self.paused or not self.canvas.winfo_exists():
             return
 
-        ret, frame = self.cap.read()
-        if not ret:
-            self.running = False
-            self.cap.release()
-            return
+        elapsed_time = (time.time() - self.mv_start_time) * 1000  # 毫秒
+        expected_frame = int(elapsed_time / 1000 * self.fps)
 
-        frame = cv2.resize(frame, (800, 400))  # 調整畫面大小
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(frame)
-        photo = ImageTk.PhotoImage(image)
+        ret = False  # 預設
+        while self.current_frame < expected_frame:
+            ret, frame = self.cap.read()
+            if not ret:
+                self.running = False
+                self.cap.release()
+                return
+            self.current_frame += 1
 
-        if self.image_on_canvas is None:
-            self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
-            self.canvas.tag_lower(self.image_on_canvas)
-        else:
-            self.canvas.itemconfig(self.image_on_canvas, image=photo)
-        self.canvas.image = photo
+        if ret:
+            frame = cv2.resize(frame, (800, 400))  # 調整畫面大小
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(frame)
+            photo = ImageTk.PhotoImage(image)
+
+            if self.image_on_canvas is None:
+                self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
+                self.canvas.tag_lower(self.image_on_canvas)
+            else:
+                self.canvas.itemconfig(self.image_on_canvas, image=photo)
+
+            self.canvas.image = photo
 
         self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
+
 
     def back_to_menu(self):
         self.hide_pause_overlay()
