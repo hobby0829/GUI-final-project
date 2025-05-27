@@ -22,6 +22,7 @@ files = os.listdir(SONG_LIST)
 BGM_MENU = os.path.join(SONG_LIST, files[0])
 SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
+SETTINGS = "assets/settings.json"
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -37,9 +38,39 @@ btn_style = {
 
 class GameSettings:
     def __init__(self):
+        self.filepath = SETTINGS
         self.volume = 100
         self.red_button = "<KeyPress-z>"
         self.blue_button = "<KeyPress-x>"
+
+        self.load_settings()
+
+    def load_settings(self):
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and data:
+                        settings = data[0]
+                        self.volume = settings.get("volume", 100)
+                        self.red_button = settings.get("red_button", "<KeyPress-z>")
+                        self.blue_button = settings.get("blue_button", "<KeyPress-x>")
+            except Exception as e:
+                print("讀取設定檔時發生錯誤：", e)
+        else:
+            self.save_settings()
+
+    def save_settings(self):
+        data = [{
+            "volume": self.volume,
+            "red_button": self.red_button,
+            "blue_button": self.blue_button
+        }]
+        try:
+            with open(self.filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print("寫入設定檔時發生錯誤：", e)
 
 class MainMenu:
     def __init__(self, root, settings):
@@ -71,92 +102,153 @@ class MainMenu:
         pygame.mixer.music.load(self.bgm)
         pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
-
+    
     def show_options_menu(self):
-        options_window = tk.Toplevel(self.root)
-        options_window.title("選項")
-        options_window.geometry("300x300")
-        options_window.resizable(False, False)
+        # 建立半透明遮罩與標題
+        self.hide_pause_buttons()
+        self.options_overlay = self.canvas.create_rectangle(100, 50, WIDTH-100, HEIGHT-50, fill='black')
+        self.options_title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="選項", font=("Arial", 28), fill="white")
 
-        def open_volume_control():
-            volume_window = tk.Toplevel(self.root)
-            volume_window.title("音量控制")
-            volume_window.geometry("300x150")
-            volume_window.resizable(False, False)
+        # 音量控制
+        self.volume_label = tk.Label(self.root, text="背景音樂音量", font=("Arial", 14), bg="black", fg="white")
+        self.volume_label.place(x=WIDTH//2 - 60, y=HEIGHT//2 - 75)
 
-            tk.Label(volume_window, text="背景音樂音量", font=("Arial", 14)).pack(pady=10)
+        current_volume = pygame.mixer.music.get_volume()
+        volume_var = tk.DoubleVar(value=current_volume * 100)
 
-            current_volume = pygame.mixer.music.get_volume()
-            volume_var = tk.DoubleVar(value=current_volume * 100)
+        def set_volume(val):
+            volume = float(val) / 100
+            pygame.mixer.music.set_volume(volume)
+            self.settings.volume = float(val)
+            self.settings.save_settings()
 
-            def set_volume(val):
-                volume = float(val) / 100
-                pygame.mixer.music.set_volume(volume)
-                self.settings.volume = float(val)  # ✅ 更新 settings
+        self.volume_slider = tk.Scale(self.root, from_=0, to=100, orient='horizontal',
+                                    variable=volume_var, command=set_volume, bg="black", fg="white",
+                                    troughcolor='gray')
+        self.volume_slider.place(x=WIDTH//2 - 60, y=HEIGHT//2 - 30)
 
-            tk.Scale(volume_window, from_=0, to=100, orient='horizontal',
-                    variable=volume_var, command=set_volume).pack(pady=5)
+        # 按鍵設定按鈕（點下後再顯示 keybind 編輯區）
+        self.btn_keybind = tk.Button(self.root, text="更改按鍵", font=("Arial", 12),
+                                    command=self.show_keybind_controls)
+        self.btn_keybind.place(x=WIDTH//2 - 50, y=HEIGHT//2 + 40)
 
-            tk.Button(volume_window, text="關閉", command=volume_window.destroy).pack(pady=10)
+        # 關閉選單按鈕
+        self.keybind_visible = False
+        self.btn_close_options = tk.Button(self.root, text="關閉選單", font=("Arial", 12),
+                                        command=self.hide_options_menu)
+        self.btn_close_options.place(x=WIDTH//2 - 50, y=HEIGHT//2 + 90)
 
-        def open_keybind_control():
-            keybind_window = tk.Toplevel(self.root)
-            keybind_window.title("按鍵設定")
-            keybind_window.geometry("300x200")
-            keybind_window.resizable(False, False)
-            tk.Label(keybind_window, text="點擊欄位後按下要設定的按鍵", font=("Arial", 10), fg="gray").pack(pady=2)
-            
-            tk.Label(keybind_window, text="紅色:", font=("Arial", 12)).pack(pady=5)
-            red_var = tk.StringVar()
-            blue_var = tk.StringVar()
+    def show_keybind_controls(self):
+        self.keybind_visible = True
+        self.hide_options_menu()
+        self.options_overlay = self.canvas.create_rectangle(100, 50, WIDTH-100, HEIGHT-50, fill='black')
 
-            red_entry = tk.Entry(keybind_window, font=("Arial", 12), textvariable=red_var, state="readonly")
-            red_entry.pack()
-            
-            tk.Label(keybind_window, text="藍色:", font=("Arial", 12)).pack(pady=5)
-            blue_entry = tk.Entry(keybind_window, font=("Arial", 12), textvariable=blue_var, state="readonly")
-            blue_entry.pack()
+        # 顯示提示文字
+        self.keybind_tip = tk.Label(self.root, text="點擊欄位後按下要設定的按鍵", font=("Arial", 10), fg="gray", bg="black")
+        self.keybind_tip.place(x=WIDTH//2 - 50, y=HEIGHT//2 - 100)
 
-            special_keys = {
-                "space", "Left", "Right", "Up", "Down", "Return",
-                "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R"
-            }
+        self.red_var = tk.StringVar()
+        self.blue_var = tk.StringVar()
 
-            def handle_key(event, var):
-                key = event.keysym
-                if len(key) == 1:
-                    var.set(key.lower())
-                elif key in special_keys:
-                    var.set(key)
-                else:
-                    var.set("")  # 不合法就清空
+        # 紅色標籤與欄位
+        self.red_label = tk.Label(self.root, text="紅色:", font=("Arial", 12), bg="black", fg="white")
+        self.red_label.place(x=WIDTH//2 - 120, y=HEIGHT//2 - 50)
 
-            red_entry.bind("<KeyPress>", lambda e: handle_key(e, red_var))
-            blue_entry.bind("<KeyPress>", lambda e: handle_key(e, blue_var))
+        self.red_entry = tk.Entry(self.root, font=("Arial", 12), textvariable=self.red_var, state="readonly")
+        self.red_entry.place(x=WIDTH//2 - 60, y=HEIGHT//2 -50)
 
-            # 初始化
-            red_key = self.settings.red_button.replace("<KeyPress-", "").replace(">", "")
-            blue_key = self.settings.blue_button.replace("<KeyPress-", "").replace(">", "")
-            red_var.set(red_key)
-            blue_var.set(blue_key)
+        # 藍色標籤與欄位
+        self.blue_label = tk.Label(self.root, text="藍色:", font=("Arial", 12), bg="black", fg="white")
+        self.blue_label.place(x=WIDTH//2 - 120, y=HEIGHT//2)
 
-            def save_keybinds():
-                red_key = red_var.get().strip()
-                blue_key = blue_var.get().strip()
-                if red_key and blue_key:
-                    self.settings.red_button = f"<KeyPress-{red_key}>"
-                    self.settings.blue_button = f"<KeyPress-{blue_key}>"
-                    messagebox.showinfo("成功", "按鍵綁定已更新")
-                    keybind_window.destroy()
-                else:
-                    messagebox.showwarning("錯誤", "請按下有效按鍵")
-            
-            tk.Button(keybind_window, text="儲存", command=save_keybinds).pack(pady=10)
+        self.blue_entry = tk.Entry(self.root, font=("Arial", 12), textvariable=self.blue_var, state="readonly")
+        self.blue_entry.place(x=WIDTH//2 - 60, y=HEIGHT//2)
 
-        # 主選單的按鈕
-        tk.Button(options_window, text="音量大小", font=("Arial", 12), command=open_volume_control).pack(pady=10)
-        tk.Button(options_window, text="更改按鍵", font=("Arial", 12), command=open_keybind_control).pack(pady=10)
-        tk.Button(options_window, text="關閉選單", font=("Arial", 12), command=options_window.destroy).pack(pady=20)
+        # 特殊按鍵支援
+        special_keys = {
+            "space", "Left", "Right", "Up", "Down", "Return",
+            "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R"
+        }
+
+        def handle_key(event, var):
+            key = event.keysym
+            if len(key) == 1:
+                var.set(key.lower())
+            elif key in special_keys:
+                var.set(key)
+            else:
+                var.set("")  # 不合法清空
+
+        self.red_entry.bind("<KeyPress>", lambda e: handle_key(e, self.red_var))
+        self.blue_entry.bind("<KeyPress>", lambda e: handle_key(e, self.blue_var))
+
+        # 初始化顯示當前綁定
+        red_key = self.settings.red_button.replace("<KeyPress-", "").replace(">", "")
+        blue_key = self.settings.blue_button.replace("<KeyPress-", "").replace(">", "")
+        self.red_var.set(red_key)
+        self.blue_var.set(blue_key)
+
+        # 儲存按鈕
+        self.btn_back = tk.Button(self.root, text="返回", font=("Arial", 12), command=self.back_to_options_menu)
+        self.btn_back.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 50)
+        self.btn_save_keys = tk.Button(self.root, text="儲存按鍵", font=("Arial", 12), command=self.save_keybinds)
+        self.btn_save_keys.place(x=WIDTH//2 + 20, y=HEIGHT//2 + 50)
+    
+    def back_to_options_menu(self):
+        self.keybind_visible = False
+        self.canvas.delete(self.options_overlay)
+        self.hide_keybind_controls()
+        self.show_options_menu()
+    
+    
+    def save_keybinds(self):
+        red_key = self.red_var.get().strip()
+        blue_key = self.blue_var.get().strip()
+        if red_key and blue_key:
+            self.settings.red_button = f"<KeyPress-{red_key}>"
+            self.settings.blue_button = f"<KeyPress-{blue_key}>"
+            self.settings.save_settings()
+            messagebox.showinfo("成功", "按鍵綁定已更新")
+            self.keybind_visible = False
+            self.canvas.delete(self.options_overlay)
+            self.hide_keybind_controls()
+            self.show_options_menu()
+        else:
+            messagebox.showwarning("錯誤", "請按下有效按鍵")
+    
+    def hide_pause_buttons(self):
+        self.start_btn.place_forget()
+        self.quit_btn.place_forget()
+
+    def restore_pause_buttons(self):
+        self.start_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2)
+        self.quit_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 50)
+
+    def hide_options_menu(self):
+        if self.options_overlay:
+            self.canvas.delete(self.options_overlay)
+            self.canvas.delete(self.options_title)
+            self.options_overlay = None
+
+        self.volume_label.place_forget()
+        self.volume_slider.place_forget()
+        self.btn_keybind.place_forget()
+        self.btn_close_options.place_forget()
+        self.hide_keybind_controls()
+        if self.keybind_visible:
+            return
+        else:
+            self.restore_pause_buttons()
+
+    def hide_keybind_controls(self):
+        for attr in [
+            "keybind_tip", "red_entry", "blue_entry", "btn_back", 
+            "btn_save_keys", "red_label", "blue_label"
+        ]:
+            widget = getattr(self, attr, None)
+            if widget:
+                widget.destroy()
+                delattr(self, attr)
     
 class SongSelect:
     def __init__(self, root, settings):
