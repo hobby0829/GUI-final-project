@@ -417,7 +417,8 @@ class TaikoGame:
     def back_to_menu(self):
         self.hide_pause_overlay()
         pygame.mixer.music.stop()
-        self.cap.release()
+        if self.is_use_mv:
+            self.cap.release()
         self.canvas.destroy()
         MainMenu(self.root, self.settings)
 
@@ -519,7 +520,8 @@ class TaikoGame:
                 json.dump(scores, f, ensure_ascii=False, indent=4)
 
             self.drums.clear()
-            self.cap.release()
+            if self.is_use_mv:
+                self.cap.release()
             self.cleanup()
             Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
             
