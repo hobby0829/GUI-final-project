@@ -422,6 +422,7 @@ class TaikoGame:
     def back_to_menu(self):
         self.hide_pause_overlay()
         pygame.mixer.music.stop()
+        self.video.close()
         self.canvas.destroy()
         MainMenu(self.root, self.settings)
 
@@ -439,7 +440,6 @@ class TaikoGame:
         self.drums.clear()
         self.cleanup()
         TaikoGame(self.root, song_path, beatmap_path, self.settings, self.is_use_mv)
-        
         
 
     def toggle_pause(self):
@@ -524,8 +524,9 @@ class TaikoGame:
                 json.dump(scores, f, ensure_ascii=False, indent=4)
 
             self.drums.clear()
+            self.video.close()
             self.cleanup()
-            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings)
+            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
             
 
     def load_score(self, file):
@@ -555,7 +556,8 @@ class TaikoGame:
             self.drum_timer_id = self.root.after(50, self.schedule_drums)
             return
         
-        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        #now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        now = pygame.mixer.music.get_pos()
         next_note_time = self.chart[0]['time'] if self.chart else None
         #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
@@ -683,13 +685,14 @@ class TaikoGame:
         self.canvas.destroy()
         
 class Score_Summary:
-    def __init__(self, root, score, combo, song_path, beatmap_path, settings):
+    def __init__(self, root, score, combo, song_path, beatmap_path, settings, is_use_mv=False):
         self.root = root
         self.score = score
         self.combo = combo
         self.song_path = song_path
         self.beatmap_path = beatmap_path
         self.settings = settings
+        self.is_use_mv = is_use_mv
 
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
@@ -712,7 +715,7 @@ class Score_Summary:
 
     def restart_game(self):
         self.destroy()
-        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings)
+        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.is_use_mv)
 
     def destroy(self):
         self.canvas.destroy()
