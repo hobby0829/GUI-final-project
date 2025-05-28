@@ -11,7 +11,7 @@ import numpy as np
 
 WIDTH = 800
 HEIGHT = 400
-DRUM_SPEED = 9
+DRUM_SPEED = 5
 JUDGE_LINE = 100
 HIT_RANGE = 50
 
@@ -370,6 +370,7 @@ class SongSelect:
     def game_start(self, song):
         self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
         self.song_path = os.path.join("assets", "song", f"{song}.mp3")
+        pygame.mixer.music.stop()
         self.cleanup()
         TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
 
@@ -480,11 +481,12 @@ class TaikoGame:
 
 
         self.time_text_id = None  # 這是用來記錄畫出來的文字的 ID
-        self.offset = (WIDTH-JUDGE_LINE)/DRUM_SPEED * 0.03
+        self.offset = (((WIDTH-JUDGE_LINE)/DRUM_SPEED) * 0.03 )*0.9
         self.set_volume(settings.volume)
 
         # 載入譜面與開始遊戲
         self.load_score(beatmap_path)
+        self.first_beat = int(self.chart[0]['time'])
         self.start_game(is_use_mv)
 
     def update_time_text(self):
@@ -554,7 +556,10 @@ class TaikoGame:
         for drum in self.drums:
             self.canvas.delete(drum['id'])
         self.root.after_cancel(self.drum_timer_id)
-        self.root.after_cancel(self.move_timer_id)
+        try:
+            self.root.after_cancel(self.move_timer_id)
+        except (AttributeError, ValueError):
+            pass  # 無需取消
         self.drums.clear()
         self.cleanup()
         TaikoGame(self.root, song_path, beatmap_path, self.settings, self.is_use_mv)
@@ -651,8 +656,6 @@ class TaikoGame:
             self.chart = json.load(f)
 
     def start_game(self, is_use_mv):
-        self.start_time = int(time.time())
-        self.schedule_drums()
         def contain():
             threading.Thread(target=self.play_bgm).start()
             self.update_time_text()
@@ -660,7 +663,14 @@ class TaikoGame:
                 self.mv_start_time = time.time()
                 self.update_mv_frame()
             self.move_drums()
-        self.root.after(int(self.offset*1000*0.9), contain)
+
+        self.start_time = int(time.time())
+        self.schedule_drums()
+        
+        if self.first_beat - int(self.offset*1000) <= 0:
+            self.root.after(int(self.offset*1000) - self.first_beat, contain)
+        else:
+            self.root.after(int(self.offset*1000), contain)
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
@@ -681,7 +691,7 @@ class TaikoGame:
         next_note_time = self.chart[0]['time'] if self.chart else None
         #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
-            if note['time'] <= now:  # 時間快到就生成
+            if note['time'] <= now :  # 時間快到就生成
                 self.spawn_drum(note['type'])
                 self.chart.remove(note)
         self.drum_timer_id = self.root.after(50, self.schedule_drums)
