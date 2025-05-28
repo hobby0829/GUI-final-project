@@ -104,6 +104,7 @@ class MainMenu:
         pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
     
+
     def show_options_menu(self):
         # 建立半透明遮罩與標題
         self.hide_pause_buttons()
@@ -667,10 +668,8 @@ class TaikoGame:
         self.start_time = int(time.time())
         self.schedule_drums()
         
-        if self.first_beat - int(self.offset*1000) <= 0:
-            self.root.after(int(self.offset*1000) - self.first_beat, contain)
-        else:
-            self.root.after(int(self.offset*1000), contain)
+        start_delay = max(0, int(self.offset * 1000) - self.first_beat)
+        self.root.after(start_delay, contain)
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
@@ -691,23 +690,29 @@ class TaikoGame:
         next_note_time = self.chart[0]['time'] if self.chart else None
         #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
-            if note['time'] <= now :  # 時間快到就生成
-                self.spawn_drum(note['type'])
+            if note['time'] <= now:
+                self.spawn_drum(note)
                 self.chart.remove(note)
         self.drum_timer_id = self.root.after(50, self.schedule_drums)
 
-    def spawn_drum(self, drum_type):
-        y = HEIGHT // 2
+    def spawn_drum(self, note):
+        drum_type = note['type']
+        x = note['start_x']
+        y = note['start_y']
+        end_x = note['end_x']
+        end_y = note['end_y']
+        move_time = note['move_time']  # 讀取移動時間
+
         width = 20
         height = 80
-        border_color = "#FFD700"  # 金黃色
+        border_color = "#FFD700"
         gradient_colors = self.get_gradient_colors(drum_type, steps=10)
 
         drum_ids = []
 
-        # 畫金黃色邊框
+        # 畫外框
         border_id = self.canvas.create_rectangle(
-            WIDTH, y - height // 2, WIDTH + width, y + height // 2,
+            x, y - height // 2, x + width, y + height // 2,
             outline=border_color, width=2, fill=""
         )
         drum_ids.append(border_id)
@@ -718,15 +723,26 @@ class TaikoGame:
             step_y1 = y - height // 2 + i * step_height
             step_y2 = step_y1 + step_height
             rect_id = self.canvas.create_rectangle(
-                WIDTH + 2, step_y1, WIDTH + width - 2, step_y2,
+                x + 2, step_y1, x + width - 2, step_y2,
                 outline="", fill=color
             )
             drum_ids.append(rect_id)
 
+        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        hit_time = now + move_time
+
         self.drums.append({
             'id': drum_ids,
             'type': drum_type,
-            'x': WIDTH,
+            'start_x': x,
+            'start_y': y,
+            'end_x': end_x,
+            'end_y': end_y,
+            'start_time': int((time.time() - self.total_pause_duration - self.start_time) * 1000),
+            'hit_time': hit_time,
+            'move_time': move_time,
+            'last_x': x,
+            'last_y': y,
             'width': width,
             'height': height
         })
@@ -748,30 +764,56 @@ class TaikoGame:
         return colors
 
     def move_drums(self):
-        # 防止畫面已被銷毀仍執行排程
         if not self.canvas.winfo_exists():
             return
-        
+
         if self.paused:
             self.root.after(30, self.move_drums)
             return
 
-        miss = False
+        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        new_drums = []
+        missed_drums = []
+
         for drum in self.drums:
-            drum['x'] -= DRUM_SPEED
-            x = drum['x']
-            if x < JUDGE_LINE - HIT_RANGE:
-                miss = True
+            start_x = drum['start_x']
+            start_y = drum['start_y']
+            end_x = drum['end_x']
+            end_y = drum['end_y']
+            t0 = drum['start_time']
+            t1 = drum['hit_time']
+            progress = (now - t0) / (t1 - t0) if (t1 - t0) > 0 else 1
+            progress = min(max(progress, 0), 1)
+
+            x = start_x + (end_x - start_x) * progress
+            y = start_y + (end_y - start_y) * progress
+
+            dx = x - drum['last_x']
+            dy = y - drum['last_y']
 
             for item_id in drum['id']:
-                self.canvas.move(item_id, -DRUM_SPEED, 0)  # 向左移動
+                self.canvas.move(item_id, dx, dy)
 
-        self.drums = [d for d in self.drums if d['x'] + d['width'] > 0]
-        self.move_timer_id = self.root.after(30, self.move_drums)
-        if miss:
-            self.check_hit(None)
+            drum['last_x'] = x
+            drum['last_y'] = y
+
+            if now > t1 + 200:  # 超過擊打時間
+                missed_drums.append(drum)
+            else:
+                new_drums.append(drum)
+
+        # 刪除超時鼓
+        for drum in missed_drums:
+            self.canvas.itemconfig(self.judge_text, text='Miss')
+            for item_id in drum['id']:
+                self.canvas.delete(item_id)
+            self.combo = 0
+            self.update_score()
+
+        self.drums = new_drums
+
         self.check_game_over()
-        
+        self.move_timer_id = self.root.after(30, self.move_drums)
 
 
     def hit_red(self, event):
@@ -783,19 +825,17 @@ class TaikoGame:
         self.check_hit('blue')
 
     def check_hit(self, hit_type):
-        # 找出在 HIT_RANGE 內的最左邊的鼓
         target_drum = None
         min_x = float('inf')
 
-        if not hit_type == None:
+        if hit_type is not None:
             for drum in self.drums:
-                distance = abs(drum['x'] - JUDGE_LINE)
+                distance = abs(drum['last_x'] - JUDGE_LINE)
                 if distance < HIT_RANGE:
-                    if drum['x'] < min_x:
-                        min_x = drum['x']
+                    if drum['last_x'] < min_x:
+                        min_x = drum['last_x']
                         target_drum = drum
 
-            # 判定最左邊的鼓是否被正確擊中
             if target_drum:
                 if target_drum['type'] == hit_type:
                     self.canvas.itemconfig(self.judge_text, text='Perfect!')
@@ -809,23 +849,23 @@ class TaikoGame:
                     self.combo = 0
                 self.update_score()
             else:
-                # 沒有鼓在範圍內也 Miss
                 self.canvas.itemconfig(self.judge_text, text='Miss')
                 self.combo = 0
                 self.update_score()
 
         else:
-            # 檢查是否有超出 HIT_RANGE（已經錯過）的鼓
+            to_remove = []
             for drum in self.drums:
-                if drum['x'] < JUDGE_LINE - HIT_RANGE:
-                    # 已經過了判定線但沒被打 → MISS
+                if drum['last_x'] < JUDGE_LINE - HIT_RANGE:
                     self.canvas.itemconfig(self.judge_text, text='Miss')
                     for item_id in drum['id']:
                         self.canvas.delete(item_id)
-                    self.drums.remove(drum)
+                    to_remove.append(drum)
                     self.combo = 0
                     self.update_score()
-                    return
+            for drum in to_remove:
+                self.drums.remove(drum)
+
 
         ## 沒有鼓在範圍內也 Miss
         #self.canvas.itemconfig(self.judge_text, text='Miss')
