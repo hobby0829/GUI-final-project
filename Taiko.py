@@ -659,17 +659,19 @@ class TaikoGame:
     def start_game(self, is_use_mv):
         def contain():
             threading.Thread(target=self.play_bgm).start()
+            self.start_time = int(time.time())
+            self.schedule_drums()
             self.update_time_text()
-            if is_use_mv:
-                self.mv_start_time = time.time()
-                self.update_mv_frame()
             self.move_drums()
-
-        self.start_time = int(time.time())
-        self.schedule_drums()
         
-        start_delay = max(0, int(self.offset * 1000) - self.first_beat)
+        if is_use_mv:
+            self.mv_start_time = time.time()
+            self.update_mv_frame()  # ✅ 提前播放影片
+
+        # start_delay = max(0, int(self.offset * 1000) - self.first_beat)
+        start_delay = 0
         self.root.after(start_delay, contain)
+
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
@@ -924,8 +926,6 @@ class Score_Summary:
         self.btn_menu.destroy()
         self.btn_restart.destroy()
         self.btn_exit.destroy()
-
-
     
 # 主程式
 if __name__ == '__main__':
