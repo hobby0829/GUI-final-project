@@ -393,6 +393,7 @@ class TaikoGame:
         self.settings = settings
         self.root.title("太鼓達人加強版")
         self.song_name = os.path.splitext(os.path.basename(song_path))[0]
+        self.line_path = os.path.splitext(beatmap_path)[0] + "_line.json"
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
 
@@ -655,6 +656,37 @@ class TaikoGame:
     def load_score(self, file):
         with open(file, 'r') as f:
             self.chart = json.load(f)
+    
+    def load_lines(self):
+        self.lines = []
+        try:
+            with open(self.line_path, 'r', encoding='utf-8') as f:
+                self.lines = json.load(f)
+                print(f"[line] Loaded {len(self.lines)} lines")
+        except Exception as e:
+            print(f"[line] Failed to load lines: {e}")
+
+    def schedule_lines(self):
+        for line in self.lines:
+            delay = line["time"]
+            self.root.after(delay, lambda l=line: self.create_line(l))
+
+    def create_line(self, line):
+        # 畫線
+        line_id = self.canvas.create_line(line["x1"], line["y1"], line["x2"], line["y2"], fill="#FFD700", width=5)
+        print(f"[line] Created line {line['id']} at {line['time']}ms")
+
+        # 記住線的 Canvas ID（可選）
+        line["canvas_id"] = line_id
+
+        # 安排線的消失
+        lifetime = line["end_time"] - line["time"]
+        self.root.after(lifetime, lambda: self.remove_line(line))
+    
+    def remove_line(self, line):
+        if "canvas_id" in line:
+            self.canvas.delete(line["canvas_id"])
+            print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
 
     def start_game(self, is_use_mv):
         def contain():
@@ -662,6 +694,8 @@ class TaikoGame:
             self.start_time = int(time.time())
             self.schedule_drums()
             self.update_time_text()
+            self.load_lines()
+            self.schedule_lines()
             self.move_drums()
         
         if is_use_mv:
