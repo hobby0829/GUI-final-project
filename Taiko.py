@@ -8,6 +8,7 @@ import threading
 import cv2
 from PIL import Image, ImageTk
 import numpy as np
+import math
 
 WIDTH = 800
 HEIGHT = 400
@@ -17,6 +18,7 @@ HIT_RANGE = 50
 
 HIT_WAV_RED = "assets/sound/hit_red.wav"
 HIT_WAV_BLUE = "assets/sound/hit_blue.mp3"
+HIT_WAV = "assets/sound/hit.mp3"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
@@ -24,6 +26,10 @@ BGM_MENU = os.path.join(SONG_LIST, files[0])
 SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
 SETTINGS = "assets/settings.json"
+
+# Cytus
+SPAWN_OFFSET = 1.5  # 提前1.5秒顯示 note
+HIT_NOTE = 0.15   # 允許誤差±0.15秒判定 Perfect
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -271,6 +277,11 @@ class SongSelect:
         self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
         self.song_buttons = []
 
+        self.selected_mode = 'taiko'  # 預設太鼓模式
+        self.mode_buttons = []  # 存儲模式按鈕元件
+
+        mode_canvas = None
+
         # 左上角的返回按鈕
         self.back_btn = tk.Button(root, text="回主菜單", font=("Arial", 12), command=self.return_to_main_menu)
         self.back_btn.place(x=10, y=10)
@@ -318,7 +329,17 @@ class SongSelect:
     
 
     def confirm_song(self, song, settings):
+
+        def select_mode_canvas(mode):
+            self.selected_mode = mode
+            # 更新圓形按鈕顏色
+            mode_canvas.itemconfig(mode_circles['taiko'],
+                                        fill="#f44336" if mode == 'taiko' else "#555555")
+            mode_canvas.itemconfig(mode_circles['cytus'],
+                                        fill="#4CAF50" if mode == 'cytus' else "#555555")
+            
         self.clear_info_panel()
+        self.mode_buttons.clear()
 
         # 嘗試讀取該首歌的最高分數
         try:
@@ -342,6 +363,38 @@ class SongSelect:
         label.place(x=WIDTH//2 + 100, y=HEIGHT//4)
         self.info_widgets.append(label)
 
+        # 模式選擇標籤
+        mode_label = tk.Label(self.root, text="選擇模式：", font=("Arial", 12), bg="#1e1e1e", fg="white")
+        mode_label.place(x=WIDTH//2 + 100, y=HEIGHT//4 + 100)
+        self.info_widgets.append(mode_label)
+
+        # 使用 Canvas 畫出圓形按鈕
+        mode_canvas = tk.Canvas(self.root, width=300, height=100, bg="#1e1e1e", highlightthickness=0)
+        mode_canvas.place(x=WIDTH//2 + 80, y=HEIGHT//4 + 130)
+        self.info_widgets.append(mode_canvas)
+
+        # 畫太鼓模式圓形
+        taiko_circle = mode_canvas.create_oval(10, 10, 80, 80,
+                                                    fill="#f44336" if self.selected_mode == 'taiko' else "#555555",
+                                                    outline="white", width=2)
+        taiko_text = mode_canvas.create_text(45, 45, text="太鼓", fill="white", font=("Arial", 10, "bold"))
+        mode_canvas.tag_bind(taiko_circle, "<Button-1>", lambda e: select_mode_canvas('taiko'))
+        mode_canvas.tag_bind(taiko_text, "<Button-1>", lambda e: select_mode_canvas('taiko'))
+
+        # 畫 Cytus 模式圓形
+        cytus_circle = mode_canvas.create_oval(110, 10, 180, 80,
+                                                    fill="#4CAF50" if self.selected_mode == 'cytus' else "#555555",
+                                                    outline="white", width=2)
+        cytus_text = mode_canvas.create_text(145, 45, text="Cytus", fill="white", font=("Arial", 10, "bold"))
+        mode_canvas.tag_bind(cytus_circle, "<Button-1>", lambda e: select_mode_canvas('cytus'))
+        mode_canvas.tag_bind(cytus_text, "<Button-1>", lambda e: select_mode_canvas('cytus'))
+
+        # 儲存圖形 id，以便切換顏色用
+        mode_circles = {
+            'taiko': taiko_circle,
+            'cytus': cytus_circle
+        }
+
         # 確認按鈕
         self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
         self.song_path = os.path.join("assets", "song", f"{song}.mp3")
@@ -360,6 +413,16 @@ class SongSelect:
         confirm_btn.place(x=800//2 + 100, y=200)
         self.info_widgets.append(confirm_btn)
 
+    def select_mode(self, mode):
+        self.selected_mode = mode
+        # 更新按鈕顏色
+        for btn in self.mode_buttons:
+            text = btn.cget("text")
+            if text == "太鼓模式":
+                btn.config(bg="#f44336" if mode == 'taiko' else "#555555")
+            elif text == "Cytus模式":
+                btn.config(bg="#4CAF50" if mode == 'cytus' else "#555555")
+
     def switch_MV(self, btn):
         if self.mv_able == False:
             self.mv_able = True
@@ -373,7 +436,10 @@ class SongSelect:
         self.song_path = os.path.join("assets", "song", f"{song}.mp3")
         pygame.mixer.music.stop()
         self.cleanup()
-        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
+        if self.selected_mode == 'taiko':
+            TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
+        elif self.selected_mode == 'cytus':
+            Cytus(self.root, song, self.settings, self.mv_able)  # 若 Cytus 也需要 MV 開關，你可以再傳 self.mv_able
 
     def clear_info_panel(self):
         for widget in self.info_widgets:
@@ -706,7 +772,6 @@ class TaikoGame:
         start_delay = 0
         self.root.after(start_delay, contain)
 
-
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
         pygame.mixer.music.set_volume(self.settings.volume / 100)
@@ -851,7 +916,6 @@ class TaikoGame:
         self.check_game_over()
         self.move_timer_id = self.root.after(30, self.move_drums)
 
-
     def hit_red(self, event):
         self.play_hit_sound('red')
         self.check_hit('red')
@@ -908,7 +972,6 @@ class TaikoGame:
         #self.combo = 0
         #self.update_score()
 
-
     def play_hit_sound(self, drum_type):
         if drum_type == 'red':
             self.hit_sound_red.play()
@@ -922,6 +985,423 @@ class TaikoGame:
     def cleanup(self):
         self.canvas.destroy()
         
+class Cytus:
+    def __init__(self, root, song_name, settings, is_use_mv=False):
+        self.root = root
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
+        self.canvas.pack()
+        self.chart = []
+        self.song_name = song_name
+        # 初始化 pygame 音效
+        pygame.mixer.init()
+
+        # 載入音效
+        self.hit_sound = pygame.mixer.Sound(HIT_WAV)
+        self.beatmap = os.path.join(BEAT_MAP, song_name+'.json')
+        self.bgm = os.path.join(SONG_LIST, song_name+'.mp3')
+
+        # 分數與 combo
+        self.score = 0
+        self.combo = 0
+        # 顯示文字
+        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
+        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
+        self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
+        
+        # 暫停按鈕
+        self.back_btn = tk.Button(root, text="暫停", font=("Arial", 12), command=self.toggle_pause)
+        self.back_btn.place(x=750, y=10)
+
+        self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, bg="#2196F3", **btn_style)
+        self.btn_restart = tk.Button(root, text="重新開始(R)", 
+                                     command=lambda beatmap_path = self.beatmap, song_path = self.bgm:                                                                        
+                                     self.restart_game(song_path, beatmap_path), bg="#4CAF50", **btn_style)
+        self.btn_quit = tk.Button(root, text="繼續(P)", command=self.toggle_pause, bg="#F44336", **btn_style)
+
+        self.paused = False
+        self.overlay = None
+
+        self.notes = []
+        self.active_notes = []
+        self.start_time = None
+        self.pause_time = None
+        self.total_pause_duration = 0
+
+        self.volume_label = tk.Label(root, text="音量", font=("Arial", 12), bg='#222222', fg='white')
+        self.volume_label.place_forget()
+
+        self.volume_slider = tk.Scale(
+            root,
+            from_=0, to=100,
+            orient='horizontal',
+            command=self.set_volume,
+            length=200,
+            font=("Arial", 12, "bold"),
+            bg="#222222",
+            fg="white",
+            troughcolor="#555555",
+            bd=0,
+            sliderrelief='flat',
+            highlightthickness=0
+        )
+        self.volume_slider.set(settings.volume)
+        self.volume_slider.place_forget()
+
+        self.note_id_text = self.canvas.create_text(WIDTH//2, HEIGHT//2, text="", font=("Arial", 20, "bold"), fill="red", tags="ui")
+        self.feedback_text = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 150, text="", font=("Arial", 28, "bold"), fill="yellow", tags="ui")
+        self.feedback_after_id = None
+
+        self.settings = settings
+        self.is_use_mv = is_use_mv
+        self.update_mv_timer_id = None  # 儲存 after 的 id
+        self.running = False
+        if is_use_mv:
+            # 載入影片
+            self.video_path = os.path.join(MV, self.song_name + '.mp4')
+            self.cap = cv2.VideoCapture(self.video_path)
+            self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+            self.frame_interval = int(1000 / self.fps)
+            self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.image_on_canvas = None
+            self.mv_start_time = None
+            self.running = True
+            self.current_frame = 0
+
+        self.root.bind("<KeyPress-p>", self.toggle_pause_key)
+        self.root.bind("<KeyPress-z>", self.handle_key_z)
+        self.set_volume(settings.volume)
+        self.load_music()
+        self.load_score()
+        self.start_game()
+
+    def handle_key_z(self, event):
+        # 取得當前滑鼠位置（相對於 canvas）
+        x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+        y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
+
+        # 模擬滑鼠事件物件（傳給原本的 handle_click）
+        fake_event = type("Event", (object,), {"x": x, "y": y})()
+        self.handle_click(fake_event)
+
+    def back_to_menu(self):
+        self.hide_pause_overlay()
+        pygame.mixer.music.stop()
+        if self.is_use_mv:
+            self.cap.release()
+        self.cleanup()
+        self.canvas.destroy()
+        MainMenu(self.root, self.settings)
+
+    def restart_game(self, song_path, beatmap_path):
+        self.hide_pause_overlay()
+        self.paused = False
+        pygame.mixer.music.stop()
+
+        # 停止影片與釋放資源
+        if self.is_use_mv:
+            self.running = False
+            self.cap.release()
+
+        self.cleanup
+        # 銷毀畫布與所有相關資源
+        self.canvas.destroy()
+
+        # 建立新的 Cytus 實例來重啟遊戲
+        Cytus(self.root, self.song_name, self.settings, self.is_use_mv)
+
+    def toggle_pause(self):
+        self.toggle_pause_key(event=None)
+
+    def toggle_pause_key(self, event=None):
+        if not self.paused:
+            self.paused = True
+            pygame.mixer.music.pause()
+            self.pause_time = time.time()
+            self.show_pause_overlay()
+        else:
+            self.paused = False
+            pygame.mixer.music.unpause()
+            # 調整 MV 開始時間，避免播放錯誤時間
+            pause_duration = time.time() - self.pause_time
+            self.total_pause_duration += pause_duration
+            if self.is_use_mv:
+                self.mv_start_time += pause_duration
+                self.update_mv_frame()  # 重新啟動畫面更新
+            self.hide_pause_overlay()
+
+    def set_volume(self, val):
+        volume = int(val) / 100
+        self.settings.volume = int(val)
+        pygame.mixer.music.set_volume(volume)
+
+    def show_pause_overlay(self):
+        # 半透明黑色遮罩（使用 rectangle 模擬）
+        self.overlay = self.canvas.create_rectangle(0, 0, WIDTH, HEIGHT, fill='black', stipple='gray50')
+        self.pause_text = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 60, text="暫停中", font=("Arial", 28), fill="white")
+
+        # 顯示音量滑桿
+        self.volume_label.place(x=WIDTH//2 - 100, y=HEIGHT//2 - 50)
+        self.volume_slider.place(x=WIDTH//2 - 100, y=HEIGHT//2 - 20)
+
+        self.btn_menu.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 40)
+        self.btn_restart.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 90)
+        self.btn_quit.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 140)
+    
+    def hide_pause_overlay(self):
+        if self.overlay:
+            self.canvas.delete(self.overlay)
+            self.canvas.delete(self.pause_text)
+            self.overlay = None
+        self.volume_label.place_forget()
+        self.volume_slider.place_forget()
+        self.btn_menu.place_forget()
+        self.btn_restart.place_forget()
+        self.btn_quit.place_forget()
+    
+    def update_score(self):
+        self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
+        self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
+
+    def check_game_over(self):
+        if not self.chart and not self.notes:
+            pygame.mixer.music.stop()
+            self.root.after_cancel(self.drum_timer_id)
+            self.root.after_cancel(self.move_timer_id)
+            self.canvas.create_text(WIDTH // 2, HEIGHT // 2, text="遊戲結束！", font=("Arial", 32), fill="white")
+
+            # 嘗試載入現有的分數資料
+            try:
+                with open(SCORE_LIST, "r", encoding="utf-8") as f:
+                    scores = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                scores = []
+
+            # 檢查當前歌曲是否已在紀錄中
+            song_found = False
+            for entry in scores:
+                if entry["song"] == self.song_name:  # self.song_name 必須在 game_start 中儲存
+                    song_found = True
+                    if self.score > entry["score"]:
+                        entry["score"] = self.score  # 更新高分
+                    break
+
+            if not song_found:
+                scores.append({"song": self.song_name, "score": self.score})  # 新增新歌曲記錄
+
+            # 寫回檔案
+            with open(SCORE_LIST, "w", encoding="utf-8") as f:
+                json.dump(scores, f, ensure_ascii=False, indent=4)
+
+            self.drums.clear()
+            if self.is_use_mv:
+                self.cap.release()
+            self.cleanup()
+            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
+            
+    def update_mv_frame(self):
+        if not self.running or self.paused or not self.canvas.winfo_exists():
+            return
+
+        elapsed_time = (time.time() - self.mv_start_time) * 1000  # 毫秒
+        expected_frame = int(elapsed_time / 1000 * self.fps)
+
+        ret = False  # 預設
+        while self.current_frame < expected_frame:
+            ret, frame = self.cap.read()
+            if not ret:
+                self.running = False
+                self.cap.release()
+                return
+            self.current_frame += 1
+
+        if ret:
+            frame = cv2.resize(frame, (800, 400))  # 調整畫面大小
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(frame)
+            photo = ImageTk.PhotoImage(image)
+
+            if self.image_on_canvas is None:
+                self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
+                self.canvas.tag_lower(self.image_on_canvas)
+            else:
+                self.canvas.itemconfig(self.image_on_canvas, image=photo)
+
+            self.canvas.image = photo
+
+        self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
+
+    def play_bgm(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.set_volume(self.settings.volume / 100)
+        pygame.mixer.music.play()
+        
+    def load_score(self):
+        with open(self.beatmap, 'r') as f:
+            self.chart = json.load(f)
+
+    def load_music(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.play()
+
+    def start_game(self):
+        self.canvas.bind("<Button-1>", self.handle_click)
+        #self.canvas.bind("<KeyPress-z>", self.handle_click)
+        #self.canvas.focus_set()  # 確保 canvas 有鍵盤焦點才能偵測鍵盤輸入
+        
+        if self.is_use_mv:
+            self.mv_start_time = time.time()
+            self.update_mv_frame()  # ✅ 提前播放影片
+        self.start_time = time.time()
+        self.update_notes()
+
+    def get_current_time(self):
+        return int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+    
+    def update_notes(self):
+
+        if not self.canvas.winfo_exists():
+            return
+
+        if self.paused:
+            self.root.after(50, self.update_notes)
+            return
+
+        now = self.get_current_time()
+        self.canvas.delete("note")
+
+        # 添加新 notes 到畫面
+        for note in self.chart[:]:
+            if note['time'] - SPAWN_OFFSET * 1000 <= now:
+                note['spawn_time'] = note['time'] - SPAWN_OFFSET * 1000  # 加入生成時間
+                self.notes.append(note)
+                self.chart.remove(note)
+
+        # 找出下一個要打的 note（未超過）
+        next_note = None
+        min_diff = float('inf')
+        for note in self.notes:
+            diff = note['time'] - now
+            if 0 <= diff < min_diff:
+                min_diff = diff
+                next_note = note
+
+        for note in self.notes[:]:
+            note_time = note['time']
+            pos_x, pos_y = note['pos']
+
+            if now > note_time + HIT_NOTE * 1000:
+                print("Miss")
+                self.show_feedback("Miss", "red")  # 顯示 Miss
+                self.combo = 0
+                self.update_score()
+                self.notes.remove(note)
+                continue
+
+            # 動畫參數
+            R_MAX = 40  # 外圈大小
+            R_MIN = 5   # 內圈初始大小
+            progress = min(1.0, max(0.0, (now - note['spawn_time']) / (note_time - note['spawn_time'])))  # 0~1
+            inner_radius = R_MIN + (R_MAX - R_MIN) * progress
+
+            # 畫外圈（固定）
+            self.canvas.create_oval(pos_x - R_MAX, pos_y - R_MAX,
+                                    pos_x + R_MAX, pos_y + R_MAX,
+                                    outline="white", width=2, tags="note")
+
+            alpha = int(255 * (1 - progress))  # 越接近打擊時刻越透明
+
+            # 轉換 alpha 到 stipple 紋理
+            if alpha > 192:
+                stipple = "gray25"   # 比較不透明
+            elif alpha > 128:
+                stipple = "gray50"   # 中等透明
+            elif alpha > 64:
+                stipple = "gray75"   # 比較透明
+            else:
+                stipple = "gray12"   # 幾乎全透明
+
+            self.canvas.create_oval(pos_x - inner_radius, pos_y - inner_radius,
+                                    pos_x + inner_radius, pos_y + inner_radius,
+                                    fill="#1e90ff", outline="", stipple=stipple, tags="note")
+
+            # 顯示 note id（置中文字）
+            self.canvas.create_text(pos_x, pos_y, text=str(note.get("id", "")),
+                                    fill="white", font=("Arial", 12, "bold"), tags="note")
+
+            # 顯示閃爍外圈（加強提示）
+            if note == next_note:
+                # 設定最大與最終半徑
+                MAX_SHRINK_RADIUS = 80
+                R_MAX = 40
+                
+                # 動畫進度（0 ~ 1）
+                duration = note['time'] - note['spawn_time']
+                progress = min(1.0, max(0.0, (now - note['spawn_time']) / duration))
+                
+                # 固定從 MAX_SHRINK_RADIUS 縮到 R_MAX
+                shrink_radius = MAX_SHRINK_RADIUS - (MAX_SHRINK_RADIUS - R_MAX) * progress
+
+                
+
+                # 畫縮小動畫圓圈
+                self.canvas.create_oval(pos_x - shrink_radius, pos_y - shrink_radius,
+                                        pos_x + shrink_radius, pos_y + shrink_radius,
+                                        outline="#00ffff", width=2, tags="note")
+        if next_note:
+            self.canvas.itemconfigure(self.note_id_text, text=f"NOW: {next_note.get('id', '')}")
+        else:
+            self.canvas.itemconfigure(self.note_id_text, text="")
+
+        if not self.chart and not self.notes:
+            self.check_game_over()
+        else:
+            self.root.after(16, self.update_notes)
+
+    def handle_click(self, event):
+        now = self.get_current_time()
+        hit = False
+        for note in self.notes[:]:
+            pos_x, pos_y = note['pos']
+            note_time = note['time']
+            distance = ((event.x - pos_x) ** 2 + (event.y - pos_y) ** 2) ** 0.5
+
+            if abs(now - note_time) <= HIT_NOTE * 1000 and distance <= 50:
+                print("Perfect!")
+                self.score += 100
+                self.combo += 1
+                self.notes.remove(note)
+                hit = True
+                self.update_score()
+                self.show_feedback("Perfect", "cyan")  # 顯示 Perfect
+                # 播放音效
+                self.hit_sound.play()
+                break
+
+        if not hit:
+            print("Miss click!")
+            self.show_feedback("Miss click!", "red")  # 顯示 Miss
+            self.combo = 0
+            self.update_score()
+
+    def show_feedback(self, text, color="yellow"):
+        # 如果之前有排程自動清除 feedback，先取消
+        if self.feedback_after_id:
+            self.root.after_cancel(self.feedback_after_id)
+
+        # 更新畫面文字
+        self.canvas.itemconfigure(self.feedback_text, text=text, fill=color)
+
+        # 安排新的清除任務，並記錄 ID
+        self.feedback_after_id = self.root.after(500, lambda: self.canvas.itemconfigure(self.feedback_text, text=""))
+
+
+    def cleanup(self):
+        self.canvas.unbind("<Button-1>")
+        self.root.unbind("<KeyPress-p>")
+        if self.update_mv_timer_id:
+            self.root.after_cancel(self.update_mv_timer_id)
+
 class Score_Summary:
     def __init__(self, root, score, combo, song_path, beatmap_path, settings, is_use_mv=False):
         self.root = root
