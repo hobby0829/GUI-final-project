@@ -728,8 +728,14 @@ class TaikoGame:
         self.lines = []
         try:
             with open(self.line_path, 'r', encoding='utf-8') as f:
-                self.lines = json.load(f)
-                print(f"[line] Loaded {len(self.lines)} lines")
+                raw_lines = json.load(f)
+                for line in raw_lines:
+                    line['movement'] = line.get('movement', [])
+                    line['current_id'] = None
+                    line['created'] = False
+                    line['expired'] = False
+                    self.lines.append(line)
+                print(f"[line] Loaded {len(self.lines)} lines (with movement support)")
         except Exception as e:
             print(f"[line] Failed to load lines: {e}")
 
@@ -739,20 +745,120 @@ class TaikoGame:
             self.root.after(delay, lambda l=line: self.create_line(l))
 
     def create_line(self, line):
-        # 畫線
-        line_id = self.canvas.create_line(line["x1"], line["y1"], line["x2"], line["y2"], fill="#FFD700", width=5)
-        print(f"[line] Created line {line['id']} at {line['time']}ms")
+        now = line["time"]
+        segments = self.build_segments(line)
+        
+        # 初始位置（預設 base）
+        x1, y1, x2, y2 = line["x1"], line["y1"], line["x2"], line["y2"]
 
-        # 記住線的 Canvas ID（可選）
-        line["canvas_id"] = line_id
+        for seg in segments:
+            if seg["start"] <= now <= seg["end"]:
+                ratio = (now - seg["start"]) / max((seg["end"] - seg["start"]), 1)
+                fx1, fy1, fx2, fy2 = seg["from"]
+                tx1, ty1, tx2, ty2 = seg["to"]
+                x1 = fx1 + (tx1 - fx1) * ratio
+                y1 = fy1 + (ty1 - fy1) * ratio
+                x2 = fx2 + (tx2 - fx2) * ratio
+                y2 = fy2 + (ty2 - fy2) * ratio
+                break
 
-        # 安排線的消失
-        lifetime = line["end_time"] - line["time"]
-        self.root.after(lifetime, lambda: self.remove_line(line))
-    
+        # 畫出線
+        canvas_id = self.canvas.create_line(x1, y1, x2, y2, fill="#FFD700", width=4)
+        line["current_id"] = canvas_id
+        line["created"] = True
+
+        # 啟動動畫
+        if not hasattr(self, 'lines_animation_started'):
+            self.lines_animation_started = True
+            self.move_lines()
+
+    def move_lines(self):
+        if self.paused:
+            # 暫停時不更新動畫，但持續呼叫自己以便等待恢復
+            self.root.after(16, self.move_lines)
+            return
+
+        # 計算目前時間，扣除總暫停時間
+        now = (time.time() - self.start_time - self.total_pause_duration) * 1000  # 毫秒
+
+        for line in self.lines:
+            if line.get("expired"):
+                continue
+
+            if not (line["time"] <= now <= line["end_time"]):
+                if now > line["end_time"] and line.get("current_id"):
+                    self.canvas.delete(line["current_id"])
+                    line["current_id"] = None
+                    line["expired"] = True
+                    print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
+                continue
+
+            if not line.get("created"):
+                continue
+
+            segments = self.build_segments(line)
+
+            x1, y1, x2, y2 = segments[-1]["to"] if segments else (line["x1"], line["y1"], line["x2"], line["y2"])
+
+            for seg in segments:
+                if seg["start"] <= now <= seg["end"]:
+                    duration = max(seg["end"] - seg["start"], 1)
+                    ratio = (now - seg["start"]) / duration
+                    fx1, fy1, fx2, fy2 = seg["from"]
+                    tx1, ty1, tx2, ty2 = seg["to"]
+                    x1 = fx1 + (tx1 - fx1) * ratio
+                    y1 = fy1 + (ty1 - fy1) * ratio
+                    x2 = fx2 + (tx2 - fx2) * ratio
+                    y2 = fy2 + (ty2 - fy2) * ratio
+                    break
+
+            if line.get("current_id"):
+                self.canvas.coords(line["current_id"], x1, y1, x2, y2)
+
+        self.root.after(16, self.move_lines)
+
+
+    def build_segments(self, line):
+        base = (line["x1"], line["y1"], line["x2"], line["y2"])
+        movements = line.get("movement", [])
+        segments = []
+
+        # 處理開頭靜止段（從 base 到第一段動畫起始前）
+        prev_end_pos = base
+        if not movements or movements[0]["start"] > line["time"]:
+            first_time = movements[0]["start"] if movements else line["end_time"]
+            segments.append({
+                "start": line["time"],
+                "end": first_time,
+                "from": base,
+                "to": base
+            })
+
+        # 處理動畫段
+        for move in movements:
+            seg = {
+                "start": move["start"],
+                "end": move["end"],
+                "from": prev_end_pos,  # 關鍵：從上一段的 to 開始
+                "to": (move["x1"], move["y1"], move["x2"], move["y2"])
+            }
+            segments.append(seg)
+            prev_end_pos = seg["to"]  # 更新為正確的下一段起點
+
+        # 補尾靜止段
+        if movements and movements[-1]["end"] < line["end_time"]:
+            segments.append({
+                "start": movements[-1]["end"],
+                "end": line["end_time"],
+                "from": prev_end_pos,
+                "to": prev_end_pos
+            })
+
+        return segments
+
     def remove_line(self, line):
-        if "canvas_id" in line:
-            self.canvas.delete(line["canvas_id"])
+        if "current_id" in line and line["current_id"]:
+            self.canvas.delete(line["current_id"])
             print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
 
     def start_game(self, is_use_mv):
