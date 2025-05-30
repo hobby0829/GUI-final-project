@@ -326,6 +326,76 @@ class SongSelect:
             btn.place(x=WIDTH//4, y=HEIGHT//4 + i * 50)
             self.song_buttons.append(btn)
         self.confirm_song(self.default_song, self.settings)
+    r
+class SongSelect:
+    def __init__(self, root, settings):
+        self.root = root
+        
+        self.song_img = None
+        self.settings = settings
+        self.confirmed = False  # 初始值
+        self.info_widgets = []
+        self.beatmap_path = ''
+        self.song_path = ''
+        self.default_song = ''
+        self.bgm = ''
+        self.mv_able = False
+
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
+        self.canvas.pack()
+
+        self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
+        self.song_buttons = []
+
+        self.selected_mode = 'taiko'  # 預設太鼓模式
+        self.mode_buttons = []  # 存儲模式按鈕元件
+
+        mode_canvas = None
+
+        # 左上角的返回按鈕
+        self.back_btn = tk.Button(root, text="回主菜單", font=("Arial", 12), command=self.return_to_main_menu)
+        self.back_btn.place(x=10, y=10)
+
+        self.load_song_list(SONG_LIST)  # 讀取歌曲資料夾名稱
+
+    def play_bgm(self):
+        pygame.mixer.music.load(self.bgm)
+        pygame.mixer.music.set_volume(self.settings.volume / 100)
+        pygame.mixer.music.play()
+
+    def return_to_main_menu(self):
+        self.canvas.destroy()
+        self.back_btn.destroy()
+        for btn in self.song_buttons:
+            btn.destroy()
+        MainMenu(self.root, self.settings)
+
+    def load_song_list(self, folder):
+        songs = [
+            os.path.splitext(f)[0]  # 取得去掉副檔名的檔案名稱
+            for f in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, f))
+        ]
+        
+        for i, song in enumerate(songs):
+            if i == 0:
+                self.default_song = song
+            btn = tk.Button(
+                self.root,
+                text=song,
+                command=lambda name=song: self.confirm_song(name, self.settings),
+                font=("Arial", 14, "bold"),
+                bg="#4CAF50",
+                fg="white",
+                activebackground="#388E3C",
+                relief="flat",
+                bd=0,
+                width=20,
+                cursor="hand2"
+            )
+            btn.place(x=WIDTH//4, y=HEIGHT//4 + i * 50)
+            self.song_buttons.append(btn)
+        self.confirm_song(self.default_song, self.settings)
     
 
     def confirm_song(self, song, settings):
@@ -356,21 +426,20 @@ class SongSelect:
         song_info = {'song':song, 'difficulty':'未知', 'score': high_score}
         
         label = tk.Label(self.root, text=f"歌曲名稱: {song_info['song']}\n"
-                        + f"難度: {song_info['difficulty']}\n"
                         + f"最高分數: {song_info['score']}\n"
                         , font=("Arial", 12), bg="#1e1e1e", fg="white", justify="left")
         
-        label.place(x=WIDTH//2 + 100, y=HEIGHT//4)
+        label.place(x=WIDTH//2 + 100, y=HEIGHT//4 - 50)
         self.info_widgets.append(label)
 
         # 模式選擇標籤
-        mode_label = tk.Label(self.root, text="選擇模式：", font=("Arial", 12), bg="#1e1e1e", fg="white")
-        mode_label.place(x=WIDTH//2 + 100, y=HEIGHT//4 + 100)
-        self.info_widgets.append(mode_label)
+        #mode_label = tk.Label(self.root, text="選擇模式：", font=("Arial", 12), bg="#1e1e1e", fg="white")
+        #mode_label.place(x=WIDTH//2 + 100, y=HEIGHT//4 + 100)
+        #self.info_widgets.append(mode_label)
 
         # 使用 Canvas 畫出圓形按鈕
         mode_canvas = tk.Canvas(self.root, width=300, height=100, bg="#1e1e1e", highlightthickness=0)
-        mode_canvas.place(x=WIDTH//2 + 80, y=HEIGHT//4 + 130)
+        mode_canvas.place(x=WIDTH//2 + 90, y=HEIGHT//4 + 150)
         self.info_widgets.append(mode_canvas)
 
         # 畫太鼓模式圓形
@@ -401,16 +470,27 @@ class SongSelect:
         confirm_btn = tk.Button(self.root, text="開始遊玩", font=("Arial", 12), bg="#2196F3", fg="white",
                                 command=lambda song=song:self.game_start(song))
         
+        # 加入歌曲圖片
+        try:
+            image_path = os.path.join("assets", "image", f"{song}.png")
+            image = Image.open(image_path).resize((260, 150))
+            self.song_img = ImageTk.PhotoImage(image)
+            img_label = tk.Label(self.root, image=self.song_img, bg="#1e1e1e")
+            img_label.place(x=WIDTH//2 + 100, y=HEIGHT // 4)
+            self.info_widgets.append(img_label)
+        except Exception as e:
+            print(f"圖片載入失敗: {e}")
+        
         filename = f"{song}.mp4"
         filepath = os.path.join(MV, filename)
         if os.path.isfile(filepath):
             switch_MV_btn = tk.Button(self.root, text="使用MV", font=("Arial", 12), bg="#2196F3", fg="white",)
             switch_MV_btn.config(command=lambda btn=switch_MV_btn: self.switch_MV(btn))
-            switch_MV_btn.place(x=800//2 + 200, y=200)
+            switch_MV_btn.place(x=WIDTH//2 + 200, y=HEIGHT//4 + 250)
             self.info_widgets.append(switch_MV_btn)
             
         
-        confirm_btn.place(x=800//2 + 100, y=200)
+        confirm_btn.place(x=WIDTH//2 + 100, y=HEIGHT//4 + 250)
         self.info_widgets.append(confirm_btn)
 
     def select_mode(self, mode):
