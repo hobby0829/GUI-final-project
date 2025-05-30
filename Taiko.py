@@ -717,7 +717,8 @@ class TaikoGame:
             if self.is_use_mv:
                 self.cap.release()
             self.cleanup()
-            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
+            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Taiko', 
+                           self.is_use_mv)
             
     def load_score(self, file):
         with open(file, 'r') as f:
@@ -1090,7 +1091,7 @@ class Cytus:
         if self.is_use_mv:
             self.cap.release()
         self.cleanup()
-        self.canvas.destroy()
+
         MainMenu(self.root, self.settings)
 
     def restart_game(self, song_path, beatmap_path):
@@ -1103,9 +1104,8 @@ class Cytus:
             self.running = False
             self.cap.release()
 
-        self.cleanup
-        # 銷毀畫布與所有相關資源
-        self.canvas.destroy()
+        self.cleanup()
+        
 
         # 建立新的 Cytus 實例來重啟遊戲
         Cytus(self.root, self.song_name, self.settings, self.is_use_mv)
@@ -1164,41 +1164,51 @@ class Cytus:
         self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
 
     def check_game_over(self):
-        if not self.chart and not self.notes:
+
+        # 1. 確認譜面已無剩餘音符，且畫面上的note已全部被消除
+        no_more_notes = not self.chart and not self.notes
+
+
+        if no_more_notes :
+            # 停止音樂與定時器
             pygame.mixer.music.stop()
-            self.root.after_cancel(self.drum_timer_id)
-            self.root.after_cancel(self.move_timer_id)
+
+            # 顯示結束文字或結算畫面
             self.canvas.create_text(WIDTH // 2, HEIGHT // 2, text="遊戲結束！", font=("Arial", 32), fill="white")
 
-            # 嘗試載入現有的分數資料
+            # 載入與更新分數紀錄（與你原本邏輯相同）
             try:
                 with open(SCORE_LIST, "r", encoding="utf-8") as f:
                     scores = json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 scores = []
 
-            # 檢查當前歌曲是否已在紀錄中
             song_found = False
             for entry in scores:
-                if entry["song"] == self.song_name:  # self.song_name 必須在 game_start 中儲存
+                if entry["song"] == self.song_name:
                     song_found = True
                     if self.score > entry["score"]:
-                        entry["score"] = self.score  # 更新高分
+                        entry["score"] = self.score
                     break
 
             if not song_found:
-                scores.append({"song": self.song_name, "score": self.score})  # 新增新歌曲記錄
+                scores.append({"song": self.song_name, "score": self.score})
 
-            # 寫回檔案
             with open(SCORE_LIST, "w", encoding="utf-8") as f:
                 json.dump(scores, f, ensure_ascii=False, indent=4)
 
-            self.drums.clear()
+            # 清理資源
             if self.is_use_mv:
                 self.cap.release()
             self.cleanup()
-            Score_Summary(self.root, self.score, self.combo, self.bgm, self.beatmap, self.settings, self.is_use_mv)
-            
+
+            # 呼叫 Cytus 風格的結算畫面（你可以修改Score_Summary，或換成自己的結算畫面）
+            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Cytus', 
+                           self.is_use_mv)
+        else:
+            # 若還沒結束，繼續下一次檢查
+            self.root.after(100, self.check_game_over)
+
     def update_mv_frame(self):
         if not self.running or self.paused or not self.canvas.winfo_exists():
             return
@@ -1399,16 +1409,23 @@ class Cytus:
     def cleanup(self):
         self.canvas.unbind("<Button-1>")
         self.root.unbind("<KeyPress-p>")
+        
         if self.update_mv_timer_id:
             self.root.after_cancel(self.update_mv_timer_id)
+            self.root.after_cancel(self.update_notes)
+        # 銷毀畫布與所有相關資源
+        self.canvas.destroy()
 
 class Score_Summary:
-    def __init__(self, root, score, combo, song_path, beatmap_path, settings, is_use_mv=False):
+    def __init__(self, root, score, combo, song_name, settings, mode, is_use_mv=False):
         self.root = root
         self.score = score
         self.combo = combo
-        self.song_path = song_path
-        self.beatmap_path = beatmap_path
+        self.song_name = song_name
+        self.beatmap_path = os.path.join(BEAT_MAP, song_name+'.json')
+        self.song_path = os.path.join(SONG_LIST, song_name+'.mp3')
+        self.mode = mode
+        
         self.settings = settings
         self.is_use_mv = is_use_mv
 
@@ -1433,7 +1450,10 @@ class Score_Summary:
 
     def restart_game(self):
         self.destroy()
-        TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.is_use_mv)
+        if self.mode == 'Taiko':
+            TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.is_use_mv)
+        else:
+            Cytus(self.root, self.song_name, self.settings, self.is_use_mv)
 
     def destroy(self):
         self.canvas.destroy()
