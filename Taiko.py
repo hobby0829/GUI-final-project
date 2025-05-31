@@ -27,9 +27,10 @@ SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
 SETTINGS = "assets/settings.json"
 
-# Cytus
+# Osu
 SPAWN_OFFSET = 1.5  # 提前1.5秒顯示 note
-HIT_NOTE = 0.15   # 允許誤差±0.15秒判定 Perfect
+HIT_NOTE_PERFECT = 0.15   # 允許誤差±0.15秒判定 Perfect
+HIT_NOTE_GREAT = 0.25
 
 btn_style = {
     "font": ("Arial", 14, "bold"),
@@ -262,75 +263,6 @@ class SongSelect:
     def __init__(self, root, settings):
         self.root = root
         
-        self.settings = settings
-        self.confirmed = False  # 初始值
-        self.info_widgets = []
-        self.beatmap_path = ''
-        self.song_path = ''
-        self.default_song = ''
-        self.bgm = ''
-        self.mv_able = False
-
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
-        self.canvas.pack()
-
-        self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
-        self.song_buttons = []
-
-        self.selected_mode = 'taiko'  # 預設太鼓模式
-        self.mode_buttons = []  # 存儲模式按鈕元件
-
-        mode_canvas = None
-
-        # 左上角的返回按鈕
-        self.back_btn = tk.Button(root, text="回主菜單", font=("Arial", 12), command=self.return_to_main_menu)
-        self.back_btn.place(x=10, y=10)
-
-        self.load_song_list(SONG_LIST)  # 讀取歌曲資料夾名稱
-
-    def play_bgm(self):
-        pygame.mixer.music.load(self.bgm)
-        pygame.mixer.music.set_volume(self.settings.volume / 100)
-        pygame.mixer.music.play()
-
-    def return_to_main_menu(self):
-        self.canvas.destroy()
-        self.back_btn.destroy()
-        for btn in self.song_buttons:
-            btn.destroy()
-        MainMenu(self.root, self.settings)
-
-    def load_song_list(self, folder):
-        songs = [
-            os.path.splitext(f)[0]  # 取得去掉副檔名的檔案名稱
-            for f in os.listdir(folder)
-            if os.path.isfile(os.path.join(folder, f))
-        ]
-        
-        for i, song in enumerate(songs):
-            if i == 0:
-                self.default_song = song
-            btn = tk.Button(
-                self.root,
-                text=song,
-                command=lambda name=song: self.confirm_song(name, self.settings),
-                font=("Arial", 14, "bold"),
-                bg="#4CAF50",
-                fg="white",
-                activebackground="#388E3C",
-                relief="flat",
-                bd=0,
-                width=20,
-                cursor="hand2"
-            )
-            btn.place(x=WIDTH//4, y=HEIGHT//4 + i * 50)
-            self.song_buttons.append(btn)
-        self.confirm_song(self.default_song, self.settings)
-    r
-class SongSelect:
-    def __init__(self, root, settings):
-        self.root = root
-        
         self.song_img = None
         self.settings = settings
         self.confirmed = False  # 初始值
@@ -405,8 +337,8 @@ class SongSelect:
             # 更新圓形按鈕顏色
             mode_canvas.itemconfig(mode_circles['taiko'],
                                         fill="#f44336" if mode == 'taiko' else "#555555")
-            mode_canvas.itemconfig(mode_circles['cytus'],
-                                        fill="#4CAF50" if mode == 'cytus' else "#555555")
+            mode_canvas.itemconfig(mode_circles['Osu'],
+                                        fill="#4CAF50" if mode == 'Osu' else "#555555")
             
         self.clear_info_panel()
         self.mode_buttons.clear()
@@ -450,18 +382,18 @@ class SongSelect:
         mode_canvas.tag_bind(taiko_circle, "<Button-1>", lambda e: select_mode_canvas('taiko'))
         mode_canvas.tag_bind(taiko_text, "<Button-1>", lambda e: select_mode_canvas('taiko'))
 
-        # 畫 Cytus 模式圓形
-        cytus_circle = mode_canvas.create_oval(110, 10, 180, 80,
-                                                    fill="#4CAF50" if self.selected_mode == 'cytus' else "#555555",
+        # 畫 Osu 模式圓形
+        Osu_circle = mode_canvas.create_oval(110, 10, 180, 80,
+                                                    fill="#4CAF50" if self.selected_mode == 'Osu' else "#555555",
                                                     outline="white", width=2)
-        cytus_text = mode_canvas.create_text(145, 45, text="Cytus", fill="white", font=("Arial", 10, "bold"))
-        mode_canvas.tag_bind(cytus_circle, "<Button-1>", lambda e: select_mode_canvas('cytus'))
-        mode_canvas.tag_bind(cytus_text, "<Button-1>", lambda e: select_mode_canvas('cytus'))
+        Osu_text = mode_canvas.create_text(145, 45, text="Osu", fill="white", font=("Arial", 10, "bold"))
+        mode_canvas.tag_bind(Osu_circle, "<Button-1>", lambda e: select_mode_canvas('Osu'))
+        mode_canvas.tag_bind(Osu_text, "<Button-1>", lambda e: select_mode_canvas('Osu'))
 
         # 儲存圖形 id，以便切換顏色用
         mode_circles = {
             'taiko': taiko_circle,
-            'cytus': cytus_circle
+            'Osu': Osu_circle
         }
 
         # 確認按鈕
@@ -500,8 +432,8 @@ class SongSelect:
             text = btn.cget("text")
             if text == "太鼓模式":
                 btn.config(bg="#f44336" if mode == 'taiko' else "#555555")
-            elif text == "Cytus模式":
-                btn.config(bg="#4CAF50" if mode == 'cytus' else "#555555")
+            elif text == "Osu模式":
+                btn.config(bg="#4CAF50" if mode == 'Osu' else "#555555")
 
     def switch_MV(self, btn):
         if self.mv_able == False:
@@ -518,8 +450,8 @@ class SongSelect:
         self.cleanup()
         if self.selected_mode == 'taiko':
             TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
-        elif self.selected_mode == 'cytus':
-            Cytus(self.root, song, self.settings, self.mv_able)  # 若 Cytus 也需要 MV 開關，你可以再傳 self.mv_able
+        elif self.selected_mode == 'Osu':
+            Osu(self.root, song, self.settings, self.mv_able)  # 若 Osu 也需要 MV 開關，你可以再傳 self.mv_able
 
     def clear_info_panel(self):
         for widget in self.info_widgets:
@@ -564,7 +496,7 @@ class TaikoGame:
         self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
 
         # 判定線
-        self.canvas.create_line(JUDGE_LINE, 0, JUDGE_LINE, HEIGHT, fill='gray', dash=(4, 2))
+        # self.canvas.create_line(JUDGE_LINE, 0, JUDGE_LINE, HEIGHT, fill='gray', dash=(4, 2))
 
         # 鼓列表與開始時間
         self.drums = []
@@ -821,7 +753,7 @@ class TaikoGame:
 
     def schedule_lines(self):
         for line in self.lines:
-            delay = line["time"]
+            delay = int(line["time"])
             self.root.after(delay, lambda l=line: self.create_line(l))
 
     def create_line(self, line):
@@ -896,7 +828,6 @@ class TaikoGame:
                 self.canvas.coords(line["current_id"], x1, y1, x2, y2)
 
         self.root.after(16, self.move_lines)
-
 
     def build_segments(self, line):
         base = (line["x1"], line["y1"], line["x2"], line["y2"])
@@ -991,8 +922,13 @@ class TaikoGame:
         end_y = note['end_y']
         move_time = note['move_time']  # 讀取移動時間
 
-        width = 20
-        height = 80
+        if abs(end_x - x) > abs(end_y - y):
+            width = 20
+            height = 80
+        else:
+            width = 80
+            height = 20
+
         border_color = "#FFD700"
         gradient_colors = self.get_gradient_colors(drum_type, steps=10)
 
@@ -1016,8 +952,9 @@ class TaikoGame:
             )
             drum_ids.append(rect_id)
 
-        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
-        hit_time = now + move_time
+        # 🔧 改為使用 note 本身的時間，不用即時計算 now
+        start_time = note['time']
+        hit_time = start_time + move_time
 
         self.drums.append({
             'id': drum_ids,
@@ -1026,7 +963,7 @@ class TaikoGame:
             'start_y': y,
             'end_x': end_x,
             'end_y': end_y,
-            'start_time': int((time.time() - self.total_pause_duration - self.start_time) * 1000),
+            'start_time': start_time,
             'hit_time': hit_time,
             'move_time': move_time,
             'last_x': x,
@@ -1034,7 +971,7 @@ class TaikoGame:
             'width': width,
             'height': height
         })
-    
+  
     def get_gradient_colors(self, drum_type, steps=10):
         if drum_type == "red":
             start = (255, 100, 100)
@@ -1112,52 +1049,132 @@ class TaikoGame:
         self.check_hit('blue')
 
     def check_hit(self, hit_type):
-        target_drum = None
-        min_x = float('inf')
-
-        if hit_type is not None:
-            for drum in self.drums:
-                distance = abs(drum['last_x'] - JUDGE_LINE)
-                if distance < HIT_RANGE:
-                    if drum['last_x'] < min_x:
-                        min_x = drum['last_x']
-                        target_drum = drum
-
-            if target_drum:
-                if target_drum['type'] == hit_type:
-                    self.canvas.itemconfig(self.judge_text, text='Perfect!')
-                    for item_id in target_drum['id']:
-                        self.canvas.delete(item_id)
-                    self.drums.remove(target_drum)
-                    self.combo += 1
-                    self.score += 100
-                else:
-                    self.canvas.itemconfig(self.judge_text, text='Miss')
-                    self.combo = 0
-                self.update_score()
-            else:
-                self.canvas.itemconfig(self.judge_text, text='Miss')
-                self.combo = 0
-                self.update_score()
-
-        else:
+        if hit_type is None:
+            # 自動 Miss 判定（鼓通過判定線未擊中）
             to_remove = []
             for drum in self.drums:
-                if drum['last_x'] < JUDGE_LINE - HIT_RANGE:
-                    self.canvas.itemconfig(self.judge_text, text='Miss')
-                    for item_id in drum['id']:
-                        self.canvas.delete(item_id)
-                    to_remove.append(drum)
-                    self.combo = 0
-                    self.update_score()
+                drum_x = drum['last_x']
+                drum_y = drum['last_y']
+
+                for line in self.lines:
+                    if not line.get("created") or line.get("expired"):
+                        continue
+
+                    coords = self.canvas.coords(line["current_id"])
+                    if len(coords) != 4:
+                        continue
+
+                    x1, y1, x2, y2 = coords
+                    is_vertical = abs(x1 - x2) < 10
+
+                    line_x_min = min(x1, x2) - HIT_RANGE
+                    line_x_max = max(x1, x2) + HIT_RANGE
+                    line_y_min = min(y1, y2) - HIT_RANGE
+                    line_y_max = max(y1, y2) + HIT_RANGE
+
+                    if is_vertical:
+                        if drum_y > line_y_max:
+                            to_remove.append(drum)
+                            break
+                    else:
+                        if drum_x > line_x_max:
+                            to_remove.append(drum)
+                            break
+
             for drum in to_remove:
+                self.canvas.itemconfig(self.judge_text, text='Miss')
+                for item_id in drum['id']:
+                    self.canvas.delete(item_id)
                 self.drums.remove(drum)
+                self.combo = 0
+                self.update_score()
+            return
+
+        # 玩家有擊鍵，支持多鼓判定
+        matched_drums = []
+
+        for line in self.lines:
+            if not line.get("created") or line.get("expired"):
+                continue
+
+            coords = self.canvas.coords(line["current_id"])
+            if len(coords) != 4:
+                continue
+
+            x1, y1, x2, y2 = coords
+            is_vertical = abs(x1 - x2) < 10
+
+            line_x_min = min(x1, x2) - HIT_RANGE
+            line_x_max = max(x1, x2) + HIT_RANGE
+            line_y_min = min(y1, y2) - HIT_RANGE
+            line_y_max = max(y1, y2) + HIT_RANGE
+
+            for drum in self.drums:
+                if drum['type'] != hit_type:
+                    continue
+
+                drum_x = drum['last_x']
+                drum_y = drum['last_y']
+
+                if is_vertical:
+                    if line_x_min <= drum_x <= line_x_max and line_y_min <= drum_y <= line_y_max:
+                        matched_drums.append(drum)
+                else:
+                    if line_y_min <= drum_y <= line_y_max and line_x_min <= drum_x <= line_x_max:
+                        matched_drums.append(drum)
+
+        if matched_drums:
+            self.canvas.itemconfig(self.judge_text, text='Perfect!')
+            for drum in matched_drums:
+                self.show_hit_effect(drum['last_x'], drum['last_y'])  # ✅ 正確位置
+                for item_id in drum['id']:
+                    self.canvas.delete(item_id)
+                self.drums.remove(drum)
+                self.combo += 1
+                self.score += 100
+        else:
+            self.canvas.itemconfig(self.judge_text, text='Miss')
+            self.combo = 0
+
+        self.update_score()
 
 
         ## 沒有鼓在範圍內也 Miss
         #self.canvas.itemconfig(self.judge_text, text='Miss')
         #self.combo = 0
         #self.update_score()
+    
+    def show_hit_effect(self, x, y, color="#FFFF00", max_radius=30, duration=200):
+
+        rect = self.canvas.create_rectangle(
+            x - 5, y - 5, x + 5, y + 5,
+            outline=color, width=2, fill=""
+        )
+
+        # circle = self.canvas.create_oval(
+        #    x - 5, y - 5, x + 5, y + 5,
+        #    outline=color, width=2
+        #)
+
+        start_time = time.time()
+        
+        def animate():
+            elapsed = (time.time() - start_time) * 1000
+            progress = min(elapsed / duration, 1.0)
+            radius = 5 + (max_radius - 5) * progress
+            alpha = int(255 * (1 - progress))  # 透明度遞減
+
+            self.canvas.coords(rect, x - radius, y - radius, x + radius, y + radius)
+
+            fade_color = f'#{255:02x}{255:02x}{int(255 * (1 - progress)):02x}'
+            self.canvas.itemconfig(rect, outline=fade_color)
+
+            if progress < 1.0:
+                self.root.after(16, animate)
+            else:
+                self.canvas.delete(rect)
+
+        animate()
 
     def play_hit_sound(self, drum_type):
         if drum_type == 'red':
@@ -1171,8 +1188,8 @@ class TaikoGame:
 
     def cleanup(self):
         self.canvas.destroy()
-        
-class Cytus:
+
+class Osu:
     def __init__(self, root, song_name, settings, is_use_mv=False):
         self.root = root
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
@@ -1188,6 +1205,9 @@ class Cytus:
         self.bgm = os.path.join(SONG_LIST, song_name+'.mp3')
 
         # 分數與 combo
+        self.perfect = 0
+        self.great = 0
+        self.miss = 0
         self.score = 0
         self.combo = 0
         # 顯示文字
@@ -1293,8 +1313,8 @@ class Cytus:
         self.cleanup()
         
 
-        # 建立新的 Cytus 實例來重啟遊戲
-        Cytus(self.root, self.song_name, self.settings, self.is_use_mv)
+        # 建立新的 Osu 實例來重啟遊戲
+        Osu(self.root, self.song_name, self.settings, self.is_use_mv)
 
     def toggle_pause(self):
         self.toggle_pause_key(event=None)
@@ -1320,6 +1340,7 @@ class Cytus:
         volume = int(val) / 100
         self.settings.volume = int(val)
         pygame.mixer.music.set_volume(volume)
+        self.hit_sound.set_volume(volume)
 
     def show_pause_overlay(self):
         # 半透明黑色遮罩（使用 rectangle 模擬）
@@ -1388,8 +1409,8 @@ class Cytus:
                 self.cap.release()
             self.cleanup()
 
-            # 呼叫 Cytus 風格的結算畫面（你可以修改Score_Summary，或換成自己的結算畫面）
-            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Cytus', 
+            # 呼叫 Osu 風格的結算畫面（你可以修改Score_Summary，或換成自己的結算畫面）
+            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Osu', 
                            self.is_use_mv)
         else:
             # 若還沒結束，繼續下一次檢查
@@ -1486,7 +1507,7 @@ class Cytus:
             note_time = note['time']
             pos_x, pos_y = note['pos']
 
-            if now > note_time + HIT_NOTE * 1000:
+            if now > note_time + HIT_NOTE_PERFECT * 1000:
                 print("Miss")
                 self.show_feedback("Miss", "red")  # 顯示 Miss
                 self.combo = 0
@@ -1517,12 +1538,13 @@ class Cytus:
             else:
                 stipple = "gray12"   # 幾乎全透明
 
+            # 顯示 note id（置中文字）
+            note_id = note.get("id", "")
             self.canvas.create_oval(pos_x - inner_radius, pos_y - inner_radius,
                                     pos_x + inner_radius, pos_y + inner_radius,
-                                    fill="#1e90ff", outline="", stipple=stipple, tags="note")
+                                    fill="#1e90ff", outline="", stipple=stipple, tags=("note", f"note_id_{note_id}"))
 
-            # 顯示 note id（置中文字）
-            self.canvas.create_text(pos_x, pos_y, text=str(note.get("id", "")),
+            self.canvas.create_text(pos_x, pos_y, text=str(note_id),
                                     fill="white", font=("Arial", 12, "bold"), tags="note")
 
             # 顯示閃爍外圈（加強提示）
@@ -1531,6 +1553,9 @@ class Cytus:
                 MAX_SHRINK_RADIUS = 80
                 R_MAX = 40
                 
+                canvas_ids = self.canvas.find_withtag(f"note_id_{next_note['id']}")
+                self.canvas.itemconfigure(canvas_ids, fill="red") 
+
                 # 動畫進度（0 ~ 1）
                 duration = note['time'] - note['spawn_time']
                 progress = min(1.0, max(0.0, (now - note['spawn_time']) / duration))
@@ -1561,22 +1586,33 @@ class Cytus:
             pos_x, pos_y = note['pos']
             note_time = note['time']
             distance = ((event.x - pos_x) ** 2 + (event.y - pos_y) ** 2) ** 0.5
+            time_diff = abs(now - note_time)
 
-            if abs(now - note_time) <= HIT_NOTE * 1000 and distance <= 50:
-                print("Perfect!")
-                self.score += 100
-                self.combo += 1
-                self.notes.remove(note)
-                hit = True
-                self.update_score()
-                self.show_feedback("Perfect", "cyan")  # 顯示 Perfect
-                # 播放音效
-                self.hit_sound.play()
-                break
+            if distance <= 50:
+                if time_diff <= HIT_NOTE_PERFECT * 1000:
+                    print("Perfect!")
+                    self.score += 100
+                    self.combo += 1
+                    self.notes.remove(note)
+                    hit = True
+                    self.update_score()
+                    self.show_feedback("Perfect", "cyan")
+                    self.hit_sound.play()
+                    break
+                elif time_diff <= HIT_NOTE_GREAT * 1000:
+                    print("Great!")
+                    self.score += 50
+                    self.combo += 1
+                    self.notes.remove(note)
+                    hit = True
+                    self.update_score()
+                    self.show_feedback("Great", "orange")
+                    self.hit_sound.play()
+                    break
 
         if not hit:
             print("Miss click!")
-            self.show_feedback("Miss click!", "red")  # 顯示 Miss
+            self.show_feedback("Miss click!", "red")
             self.combo = 0
             self.update_score()
 
@@ -1591,14 +1627,15 @@ class Cytus:
         # 安排新的清除任務，並記錄 ID
         self.feedback_after_id = self.root.after(500, lambda: self.canvas.itemconfigure(self.feedback_text, text=""))
 
-
     def cleanup(self):
         self.canvas.unbind("<Button-1>")
         self.root.unbind("<KeyPress-p>")
         
         if self.update_mv_timer_id:
             self.root.after_cancel(self.update_mv_timer_id)
-            self.root.after_cancel(self.update_notes)
+        if self.feedback_after_id:
+            self.root.after_cancel(self.feedback_after_id)
+        self.root.after_cancel(self.update_notes)
         # 銷毀畫布與所有相關資源
         self.canvas.destroy()
 
@@ -1639,7 +1676,7 @@ class Score_Summary:
         if self.mode == 'Taiko':
             TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.is_use_mv)
         else:
-            Cytus(self.root, self.song_name, self.settings, self.is_use_mv)
+            Osu(self.root, self.song_name, self.settings, self.is_use_mv)
 
     def destroy(self):
         self.canvas.destroy()
