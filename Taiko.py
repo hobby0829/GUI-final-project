@@ -1211,8 +1211,16 @@ class Osu:
         self.score = 0
         self.combo = 0
         # 顯示文字
-        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
-        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
+        #self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
+        #self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
+        # 分數陰影
+        self.shadow1 = self.canvas.create_text(12, 12, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='black')
+        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='white')
+
+        # 連擊陰影
+        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='Combo: 0', font=('Arial', 16, 'bold'), fill='black')
+        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16, 'bold'), fill='orange')
+
         self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
         
         # 暫停按鈕
@@ -1368,8 +1376,10 @@ class Osu:
     
     def update_score(self):
         self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
+        self.canvas.itemconfig(self.shadow1, text=f'Score: {self.score}')
         self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
-
+        self.canvas.itemconfig(self.shadow2, text=f'Combo: {self.combo}')
+        
     def check_game_over(self):
 
         # 1. 確認譜面已無剩餘音符，且畫面上的note已全部被消除
@@ -1494,14 +1504,13 @@ class Osu:
                 self.notes.append(note)
                 self.chart.remove(note)
 
-        # 找出下一個要打的 note（未超過）
-        next_note = None
-        min_diff = float('inf')
-        for note in self.notes:
-            diff = note['time'] - now
-            if 0 <= diff < min_diff:
-                min_diff = diff
-                next_note = note
+         # 先排序 notes，找出未來三個最近的 note
+        notes_sorted = sorted(self.notes, key=lambda n: n['time'])
+        future_notes = [note for note in notes_sorted if note['time'] >= now]
+    
+        next_note = future_notes[0] if len(future_notes) > 0 else None
+        next_next_note = future_notes[1] if len(future_notes) > 1 else None
+        next_next_next_note = future_notes[2] if len(future_notes) > 2 else None
 
         for note in self.notes[:]:
             note_time = note['time']
@@ -1547,28 +1556,35 @@ class Osu:
             self.canvas.create_text(pos_x, pos_y, text=str(note_id),
                                     fill="white", font=("Arial", 12, "bold"), tags="note")
 
+            # 設定最大與最終半徑
+            MAX_SHRINK_RADIUS = 80
+            R_MAX = 40
+            
+            # 動畫進度（0 ~ 1）
+            duration = note['time'] - note['spawn_time']
+            progress = min(1.0, max(0.0, (now - note['spawn_time']) / duration))
+            
+            # 固定從 MAX_SHRINK_RADIUS 縮到 R_MAX
+            shrink_radius = MAX_SHRINK_RADIUS - (MAX_SHRINK_RADIUS - R_MAX) * progress
+
+            # 畫縮小動畫圓圈
+            self.canvas.create_oval(pos_x - shrink_radius, pos_y - shrink_radius,
+                                    pos_x + shrink_radius, pos_y + shrink_radius,
+                                    outline="#00ffff", width=2, tags="note")
+            
             # 顯示閃爍外圈（加強提示）
             if note == next_note:
-                # 設定最大與最終半徑
-                MAX_SHRINK_RADIUS = 80
-                R_MAX = 40
-                
                 canvas_ids = self.canvas.find_withtag(f"note_id_{next_note['id']}")
                 self.canvas.itemconfigure(canvas_ids, fill="red") 
 
-                # 動畫進度（0 ~ 1）
-                duration = note['time'] - note['spawn_time']
-                progress = min(1.0, max(0.0, (now - note['spawn_time']) / duration))
-                
-                # 固定從 MAX_SHRINK_RADIUS 縮到 R_MAX
-                shrink_radius = MAX_SHRINK_RADIUS - (MAX_SHRINK_RADIUS - R_MAX) * progress
+            elif note == next_next_note:
+                canvas_ids = self.canvas.find_withtag(f"note_id_{next_next_note['id']}")
+                self.canvas.itemconfigure(canvas_ids, fill="orange") 
 
+            #elif note == next_next_next_note:
+            #    canvas_ids = self.canvas.find_withtag(f"note_id_{next_next_next_note['id']}")
+            #    self.canvas.itemconfigure(canvas_ids, fill="yellow") 
                 
-
-                # 畫縮小動畫圓圈
-                self.canvas.create_oval(pos_x - shrink_radius, pos_y - shrink_radius,
-                                        pos_x + shrink_radius, pos_y + shrink_radius,
-                                        outline="#00ffff", width=2, tags="note")
         if next_note:
             self.canvas.itemconfigure(self.note_id_text, text=f"NOW: {next_note.get('id', '')}")
         else:
