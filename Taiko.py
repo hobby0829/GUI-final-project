@@ -574,7 +574,7 @@ class TaikoGame:
     
     def update_time_text(self):
         now = self.get_game_time()  # 換成秒
-        display_time = f"{int(now // 60):02}:{int(now % 60):02}.{int((now * 1000) % 1000):03}"
+        display_time = f"{int(now // 60):02}:{int(now % 60):02}"
 
         if self.time_text_id is not None:
             # 更新現有文字
@@ -593,7 +593,7 @@ class TaikoGame:
         if not self.running or self.paused or not self.canvas.winfo_exists():
             return
 
-        elapsed_time = (time.time() - self.mv_start_time) * 1000  # 毫秒
+        elapsed_time = self.get_game_time() * 1000  # 毫秒
         expected_frame = int(elapsed_time / 1000 * self.fps)
 
         ret = False  # 預設
@@ -1218,6 +1218,7 @@ class Osu:
         self.score = 0
         self.combo = 0
         self.max_combo = self.combo
+        self.time_text_id = None
         # 顯示文字
         #self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
         #self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
@@ -1298,6 +1299,10 @@ class Osu:
         self.load_score()
         self.start_game()
 
+    def get_game_time(self):
+        """取得目前遊戲內的經過時間（秒）"""
+        return pygame.mixer.music.get_pos()
+    
     def handle_key_z(self, event):
         # 取得當前滑鼠位置（相對於 canvas）
         x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
@@ -1351,6 +1356,23 @@ class Osu:
                 self.mv_start_time += pause_duration
                 self.update_mv_frame()  # 重新啟動畫面更新
             self.hide_pause_overlay()
+
+    def update_time_text(self):
+        now = self.get_game_time() / 1000  # 換成秒
+        display_time = f"{int(now // 60):02}:{int(now % 60):02}"
+
+        if self.time_text_id is not None:
+            # 更新現有文字
+            self.canvas.itemconfig(self.time_text_id, text=f"音樂時間：{display_time}")
+        else:
+            # 第一次畫出時間文字
+            self.time_text_id = self.canvas.create_text(
+                100, 30, text=f"音樂時間：{display_time}",
+                fill="white", font=("Arial", 16, "bold"), anchor="w"
+            )
+
+        # 每 1000 毫秒（1 秒）後再次呼叫自己
+        self.canvas.after(1000, self.update_time_text)
 
     def set_volume(self, val):
         volume = int(val) / 100
@@ -1438,7 +1460,7 @@ class Osu:
         if not self.running or self.paused or not self.canvas.winfo_exists():
             return
 
-        elapsed_time = (time.time() - self.mv_start_time) * 1000  # 毫秒
+        elapsed_time = self.get_game_time()  # 毫秒
         expected_frame = int(elapsed_time / 1000 * self.fps)
 
         ret = False  # 預設
@@ -1485,12 +1507,11 @@ class Osu:
         if self.is_use_mv:
             self.mv_start_time = time.time()
             self.update_mv_frame()  # ✅ 提前播放影片
+        
         self.play_bgm()
+        self.update_time_text()
         self.start_time = time.time()
         self.update_notes()
-
-    def get_current_time(self):
-        return int((time.time() - self.total_pause_duration - self.start_time) * 1000)
     
     def update_notes(self):
 
@@ -1501,7 +1522,7 @@ class Osu:
             self.root.after(50, self.update_notes)
             return
 
-        now = self.get_current_time()
+        now = self.get_game_time()
         self.canvas.delete("note")
 
         # 添加新 notes 到畫面
@@ -1603,7 +1624,7 @@ class Osu:
             self.root.after(16, self.update_notes)
 
     def handle_click(self, event):
-        now = self.get_current_time()
+        now = self.get_game_time()
         
         hit = False
         for note in self.notes[:]:
@@ -1658,6 +1679,7 @@ class Osu:
     def cleanup(self):
         self.canvas.unbind("<Button-1>")
         self.root.unbind("<KeyPress-p>")
+        self.root.unbind("<KeyPress-z>")
         
         if self.update_mv_timer_id:
             self.root.after_cancel(self.update_mv_timer_id)

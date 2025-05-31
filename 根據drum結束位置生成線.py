@@ -107,7 +107,8 @@ def generate_lines_from_drums(drum_file, line_file):
         json.dump(lines, f, indent=4)
     print(f"[OK] 生成 {len(lines)} 條判定線到 {line_file}")
 
-DRUM_FILE = r"C:\Users\Administrator\Python\Windows design\GUI-final-project\assets\beatmap\春日影.json"
-LINE_FILE = r"C:\Users\Administrator\Python\Windows design\GUI-final-project\assets\beatmap\春日影_line.json"
+PATH = 'assets\\beatmap\\Ave Mujica'
+DRUM_FILE = PATH + '.json'
+LINE_FILE = PATH + '_line.json'
 # 使用方式
 generate_lines_from_drums(DRUM_FILE, LINE_FILE)

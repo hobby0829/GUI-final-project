@@ -58,7 +58,7 @@ while running:
 pygame.mixer.music.stop()
 
 # 儲存譜面
-with open(f'{SONG_LIST}/{SONG_NAME}.json', 'w', encoding='utf-8') as f:
+with open(f'assets/beatmap/{SONG_NAME}.json', 'w', encoding='utf-8') as f:
     json.dump(beatmap, f, indent=2)
 
 print(f"譜面已儲存為 {SONG_NAME}.json！")
