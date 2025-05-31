@@ -567,9 +567,13 @@ class TaikoGame:
         self.load_score(beatmap_path)
         self.first_beat = int(self.chart[0]['time'])
         self.start_game(is_use_mv)
-
+        
+    def get_game_time(self):
+        """取得目前遊戲內的經過時間（秒）"""
+        return pygame.mixer.music.get_pos() / 1000.0
+    
     def update_time_text(self):
-        now = pygame.mixer.music.get_pos() / 1000  # 換成秒
+        now = self.get_game_time()  # 換成秒
         display_time = f"{int(now // 60):02}:{int(now % 60):02}.{int((now * 1000) % 1000):03}"
 
         if self.time_text_id is not None:
@@ -756,7 +760,7 @@ class TaikoGame:
             self.root.after(delay, lambda l=line: self.create_line(l))
 
     def create_line(self, line):
-        if not self.running or self.paused or not self.canvas.winfo_exists():
+        if self.paused or not self.canvas.winfo_exists():
             return
         now = line["time"]
         segments = self.build_segments(line)
@@ -793,7 +797,7 @@ class TaikoGame:
 
         # 計算目前時間，扣除總暫停時間
         now = (time.time() - self.start_time - self.total_pause_duration) * 1000  # 毫秒
-
+        now = self.get_game_time() * 1000
         for line in self.lines:
             if line.get("expired"):
                 continue
@@ -877,7 +881,7 @@ class TaikoGame:
         def contain():
             pygame.mixer.music.load(self.bgm)
             self.play_bgm()
-            self.start_time = int(time.time())
+            self.start_time = int(time.time())  # 根據經驗估計，也可以測量出來
             self.schedule_drums()
             self.update_time_text()
             self.load_lines()
@@ -907,7 +911,7 @@ class TaikoGame:
             return
         
         now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
-        #now = pygame.mixer.music.get_pos()
+        now = self.get_game_time() * 1000
         next_note_time = self.chart[0]['time'] if self.chart else None
         #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart:
@@ -999,6 +1003,7 @@ class TaikoGame:
             return
 
         now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
+        now = self.get_game_time() * 1000
         new_drums = []
         missed_drums = []
 
@@ -1599,6 +1604,7 @@ class Osu:
 
     def handle_click(self, event):
         now = self.get_current_time()
+        
         hit = False
         for note in self.notes[:]:
             pos_x, pos_y = note['pos']
