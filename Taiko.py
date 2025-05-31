@@ -4,7 +4,6 @@ from tkinter import messagebox
 import json
 import time
 import pygame
-import threading
 import cv2
 from PIL import Image, ImageTk
 import numpy as np
@@ -877,7 +876,7 @@ class TaikoGame:
     def start_game(self, is_use_mv):
         def contain():
             pygame.mixer.music.load(self.bgm)
-            threading.Thread(target=self.play_bgm).start()
+            self.play_bgm()
             self.start_time = int(time.time())
             self.schedule_drums()
             self.update_time_text()
@@ -1222,8 +1221,8 @@ class Osu:
         self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='white')
 
         # 連擊陰影
-        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='Combo: 0', font=('Arial', 16, 'bold'), fill='black')
-        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16, 'bold'), fill='orange')
+        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='0\nCombo', font=('Arial', 16, 'bold'), fill='black')
+        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='0\nCombo', font=('Arial', 16, 'bold'), fill='orange')
 
         self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
         
@@ -1381,8 +1380,8 @@ class Osu:
     def update_score(self):
         self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
         self.canvas.itemconfig(self.shadow1, text=f'Score: {self.score}')
-        self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
-        self.canvas.itemconfig(self.shadow2, text=f'Combo: {self.combo}')
+        self.canvas.itemconfig(self.combo_text, text=f'{self.combo}\nCombo')
+        self.canvas.itemconfig(self.shadow2, text=f'{self.combo}\nCombo')
         
     def check_game_over(self):
 
@@ -1463,7 +1462,7 @@ class Osu:
         self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
 
     def play_bgm(self):
-        pygame.mixer.music.load(self.bgm)
+        
         pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
         
@@ -1473,16 +1472,15 @@ class Osu:
 
     def load_music(self):
         pygame.mixer.music.load(self.bgm)
-        pygame.mixer.music.play()
 
     def start_game(self):
         self.canvas.bind("<Button-1>", self.handle_click)
         #self.canvas.bind("<KeyPress-z>", self.handle_click)
         #self.canvas.focus_set()  # 確保 canvas 有鍵盤焦點才能偵測鍵盤輸入
-        
         if self.is_use_mv:
             self.mv_start_time = time.time()
             self.update_mv_frame()  # ✅ 提前播放影片
+        self.play_bgm()
         self.start_time = time.time()
         self.update_notes()
 
