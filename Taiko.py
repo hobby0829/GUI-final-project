@@ -757,6 +757,8 @@ class TaikoGame:
             self.root.after(delay, lambda l=line: self.create_line(l))
 
     def create_line(self, line):
+        if not self.running or self.paused or not self.canvas.winfo_exists():
+            return
         now = line["time"]
         segments = self.build_segments(line)
         
@@ -874,6 +876,7 @@ class TaikoGame:
 
     def start_game(self, is_use_mv):
         def contain():
+            pygame.mixer.music.load(self.bgm)
             threading.Thread(target=self.play_bgm).start()
             self.start_time = int(time.time())
             self.schedule_drums()
@@ -891,7 +894,7 @@ class TaikoGame:
         self.root.after(start_delay, contain)
 
     def play_bgm(self):
-        pygame.mixer.music.load(self.bgm)
+        
         pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
 
@@ -1210,6 +1213,7 @@ class Osu:
         self.miss = 0
         self.score = 0
         self.combo = 0
+        self.max_combo = self.combo
         # 顯示文字
         #self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
         #self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
@@ -1420,7 +1424,7 @@ class Osu:
             self.cleanup()
 
             # 呼叫 Osu 風格的結算畫面（你可以修改Score_Summary，或換成自己的結算畫面）
-            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Osu', 
+            Score_Summary(self.root, self.score, self.max_combo, self.song_name, self.settings, 'Osu', 
                            self.is_use_mv)
         else:
             # 若還沒結束，繼續下一次檢查
@@ -1609,6 +1613,8 @@ class Osu:
                     print("Perfect!")
                     self.score += 100
                     self.combo += 1
+                    if self.max_combo < self.combo:
+                        self.max_combo = self.combo
                     self.notes.remove(note)
                     hit = True
                     self.update_score()
@@ -1619,6 +1625,8 @@ class Osu:
                     print("Great!")
                     self.score += 50
                     self.combo += 1
+                    if self.max_combo < self.combo:
+                        self.max_combo = self.combo
                     self.notes.remove(note)
                     hit = True
                     self.update_score()
