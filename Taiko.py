@@ -971,7 +971,7 @@ class TaikoGame:
             'width': width,
             'height': height
         })
-  
+    
     def get_gradient_colors(self, drum_type, steps=10):
         if drum_type == "red":
             start = (255, 100, 100)
@@ -1690,4 +1690,3 @@ if __name__ == '__main__':
     settings = GameSettings()
     menu = MainMenu(root, settings)
     root.mainloop()
-
