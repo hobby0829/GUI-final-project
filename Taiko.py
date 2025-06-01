@@ -1,13 +1,11 @@
-import os
-import tkinter as tk
-from tkinter import messagebox
-import json
-import time
-import pygame
-import cv2
-from PIL import Image, ImageTk
-import numpy as np
-import math
+import os                           # 對路徑做一頓操作
+import tkinter as tk                # 核心
+from tkinter import messagebox      # messagebox
+import json                         # 遊戲資料的儲存格式
+#import time                         # 
+import pygame                       # 
+import cv2                          # 
+from PIL import Image, ImageTk      # 
 
 WIDTH = 800
 HEIGHT = 400
@@ -90,7 +88,7 @@ class MainMenu:
         self.bgm = BGM_MENU
         self.play_bgm()
 
-        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="太鼓達人 加強版", font=("Arial", 32, "bold"))
+        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="節奏遊戲", font=("Arial", 32, "bold"))
 
         self.start_btn = tk.Button(root, text="開始遊戲", font=("Arial", 16), command=self.start_game)
         self.quit_btn = tk.Button(root, text="選單", font=("Arial", 16), command=self.show_options_menu)
@@ -275,7 +273,7 @@ class SongSelect:
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
         self.canvas.pack()
 
-        self.title = self.canvas.create_text(400, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
+        self.title = self.canvas.create_text(WIDTH//2, 40, text="選擇歌曲", fill="white", font=("Arial", 28, "bold"))
         self.song_buttons = []
 
         self.selected_mode = 'taiko'  # 預設太鼓模式
@@ -324,7 +322,7 @@ class SongSelect:
                 width=20,
                 cursor="hand2"
             )
-            btn.place(x=WIDTH//4, y=HEIGHT//4 + i * 50)
+            btn.place(x=WIDTH//4 - 100, y=HEIGHT//4 + i * 50)
             self.song_buttons.append(btn)
         self.confirm_song(self.default_song, self.settings)
     
@@ -499,9 +497,8 @@ class TaikoGame:
 
         # 鼓列表與開始時間
         self.drums = []
-        self.start_time = None
-        self.pause_time = None
-        self.total_pause_duration = 0
+
+
         self.chart = []
 
         self.drum_timer_id = None
@@ -554,7 +551,7 @@ class TaikoGame:
             self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             self.image_on_canvas = None
-            self.mv_start_time = None
+
             self.running = True
             self.current_frame = 0
 
@@ -654,16 +651,13 @@ class TaikoGame:
         if not self.paused:
             self.paused = True
             pygame.mixer.music.pause()
-            self.pause_time = time.time()
             self.show_pause_overlay()
         else:
             self.paused = False
             pygame.mixer.music.unpause()
             # 調整 MV 開始時間，避免播放錯誤時間
-            pause_duration = time.time() - self.pause_time
-            self.total_pause_duration += pause_duration
+
             if self.is_use_mv:
-                self.mv_start_time += pause_duration
                 self.update_mv_frame()  # 重新啟動畫面更新
             self.hide_pause_overlay()
 
@@ -769,9 +763,6 @@ class TaikoGame:
                 return seg["from"]
         # 超過最後一段
         return segments[-1]["to"] if segments else (line["x1"], line["y1"], line["x2"], line["y2"])
-    
-    def get_current_play_time(self):
-        return (time.time() - self.start_time - self.total_pause_duration) * 1000
 
 
     def create_line(self, line, now):
@@ -884,7 +875,6 @@ class TaikoGame:
         def contain():
             pygame.mixer.music.load(self.bgm)
             self.play_bgm()
-            self.start_time = int(time.time())  # 根據經驗估計，也可以測量出來
             self.schedule_drums()
             self.update_time_text()
             self.load_lines()
@@ -892,7 +882,6 @@ class TaikoGame:
             self.move_drums()
         
         if is_use_mv:
-            self.mv_start_time = time.time()
             self.update_mv_frame()  # ✅ 提前播放影片
 
         # start_delay = max(0, int(self.offset * 1000) - self.first_beat)
@@ -913,9 +902,7 @@ class TaikoGame:
             self.drum_timer_id = self.root.after(50, self.schedule_drums)
             return
         
-        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
         now = self.get_game_time() * 1000
-        next_note_time = self.chart[0]['time'] if self.chart else None
         # print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart[:]:  # 迭代副本以允許移除
             if not note.get("spawned") and now >= note["time"]:
@@ -1006,7 +993,6 @@ class TaikoGame:
             self.root.after(16, self.move_drums)
             return
 
-        now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
         now = self.get_game_time() * 1000
         print(f"[DEBUG] time={now:.1f}ms")
         new_drums = []
@@ -1168,10 +1154,10 @@ class TaikoGame:
         #    outline=color, width=2
         #)
 
-        start_time = time.time()
+        start_time = self.get_game_time()
         
         def animate():
-            elapsed = (time.time() - start_time) * 1000
+            elapsed = (self.get_game_time() - start_time) * 1000
             progress = min(elapsed / duration, 1.0)
             radius = 5 + (max_radius - 5) * progress
             alpha = int(255 * (1 - progress))  # 透明度遞減
@@ -1252,9 +1238,7 @@ class Osu:
 
         self.notes = []
         self.active_notes = []
-        self.start_time = None
-        self.pause_time = None
-        self.total_pause_duration = 0
+
 
         self.volume_label = tk.Label(root, text="音量", font=("Arial", 12), bg='#222222', fg='white')
         self.volume_label.place_forget()
@@ -1293,7 +1277,6 @@ class Osu:
             self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             self.image_on_canvas = None
-            self.mv_start_time = None
             self.running = True
             self.current_frame = 0
 
@@ -1349,16 +1332,13 @@ class Osu:
         if not self.paused:
             self.paused = True
             pygame.mixer.music.pause()
-            self.pause_time = time.time()
             self.show_pause_overlay()
         else:
             self.paused = False
             pygame.mixer.music.unpause()
             # 調整 MV 開始時間，避免播放錯誤時間
-            pause_duration = time.time() - self.pause_time
-            self.total_pause_duration += pause_duration
+
             if self.is_use_mv:
-                self.mv_start_time += pause_duration
                 self.update_mv_frame()  # 重新啟動畫面更新
             self.hide_pause_overlay()
 
@@ -1510,12 +1490,10 @@ class Osu:
         #self.canvas.bind("<KeyPress-z>", self.handle_click)
         #self.canvas.focus_set()  # 確保 canvas 有鍵盤焦點才能偵測鍵盤輸入
         if self.is_use_mv:
-            self.mv_start_time = time.time()
             self.update_mv_frame()  # ✅ 提前播放影片
         
         self.play_bgm()
         self.update_time_text()
-        self.start_time = time.time()
         self.update_notes()
     
     def update_notes(self):
