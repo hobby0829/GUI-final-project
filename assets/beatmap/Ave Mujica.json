@@ -1693,7 +1693,7 @@
     },
     {
         "time": 37024.0,
-        "type": "red",
+        "type": "blue",
         "id": 95,
         "pos": [
             450,
@@ -1705,8 +1705,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1723,13 +1723,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 37680.0,
-        "type": "blue",
+        "type": "red",
         "id": 97,
         "pos": [
             394,
@@ -1741,8 +1741,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1759,13 +1759,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 37981.0,
-        "type": "blue",
+        "type": "red",
         "id": 99,
         "pos": [
             303,
@@ -1777,13 +1777,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 38372.0,
-        "type": "red",
+        "type": "blue",
         "id": 100,
         "pos": [
             253,
@@ -1795,8 +1795,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1813,8 +1813,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1831,8 +1831,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1849,13 +1849,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 39361.0,
-        "type": "blue",
+        "type": "red",
         "id": 104,
         "pos": [
             482,
@@ -1867,13 +1867,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 39546.0,
-        "type": "blue",
+        "type": "red",
         "id": 105,
         "pos": [
             207,
@@ -1885,13 +1885,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 39848.0,
-        "type": "blue",
+        "type": "red",
         "id": 106,
         "pos": [
             412,
@@ -1903,8 +1903,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1921,8 +1921,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1939,13 +1939,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 41717.0,
-        "type": "red",
+        "type": "blue",
         "id": 109,
         "pos": [
             253,
@@ -1957,13 +1957,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 41917.0,
-        "type": "blue",
+        "type": "red",
         "id": 110,
         "pos": [
             386,
@@ -1975,8 +1975,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -1993,8 +1993,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2011,13 +2011,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 43170.0,
-        "type": "red",
+        "type": "blue",
         "id": 113,
         "pos": [
             207,
@@ -2029,13 +2029,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 43455.0,
-        "type": "blue",
+        "type": "red",
         "id": 114,
         "pos": [
             156,
@@ -2047,8 +2047,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2065,13 +2065,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 43970.0,
-        "type": "red",
+        "type": "blue",
         "id": 116,
         "pos": [
             301,
@@ -2083,13 +2083,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 44455.0,
-        "type": "red",
+        "type": "blue",
         "id": 117,
         "pos": [
             431,
@@ -2101,8 +2101,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2119,13 +2119,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 44958.0,
-        "type": "red",
+        "type": "blue",
         "id": 119,
         "pos": [
             274,
@@ -2137,13 +2137,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 45077.0,
-        "type": "red",
+        "type": "blue",
         "id": 120,
         "pos": [
             210,
@@ -2155,8 +2155,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2173,13 +2173,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 45514.0,
-        "type": "red",
+        "type": "blue",
         "id": 122,
         "pos": [
             340,
@@ -2191,8 +2191,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2209,8 +2209,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2227,8 +2227,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2245,13 +2245,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 46192.0,
-        "type": "red",
+        "type": "blue",
         "id": 126,
         "pos": [
             366,
@@ -2263,13 +2263,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 46353.0,
-        "type": "blue",
+        "type": "red",
         "id": 127,
         "pos": [
             215,
@@ -2281,8 +2281,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
@@ -2299,13 +2299,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 46635.0,
-        "type": "blue",
+        "type": "red",
         "id": 129,
         "pos": [
             213,
@@ -2317,13 +2317,13 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
         "time": 46781.0,
-        "type": "red",
+        "type": "blue",
         "id": 130,
         "pos": [
             305,
@@ -2335,8 +2335,8 @@
         ],
         "start_x": 800,
         "end_x": 100,
-        "start_y": 300,
-        "end_y": 0,
+        "start_y": 400,
+        "end_y": 100,
         "move_time": 3000
     },
     {
