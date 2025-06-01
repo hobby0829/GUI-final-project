@@ -754,85 +754,80 @@ class TaikoGame:
         except Exception as e:
             print(f"[line] Failed to load lines: {e}")
 
-    def schedule_lines(self):
-        for line in self.lines:
-            delay = int(line["time"])
-            self.root.after(delay, lambda l=line: self.create_line(l))
-
-    def create_line(self, line):
-        if self.paused or not self.canvas.winfo_exists():
-            return
-        now = line["time"]
-        segments = self.build_segments(line)
-        
-        # 初始位置（預設 base）
-        x1, y1, x2, y2 = line["x1"], line["y1"], line["x2"], line["y2"]
-
+    def get_position_from_segments(self, segments, now, line):
         for seg in segments:
             if seg["start"] <= now <= seg["end"]:
-                ratio = (now - seg["start"]) / max((seg["end"] - seg["start"]), 1)
+                ratio = (now - seg["start"]) / max(seg["end"] - seg["start"], 1)
                 fx1, fy1, fx2, fy2 = seg["from"]
                 tx1, ty1, tx2, ty2 = seg["to"]
                 x1 = fx1 + (tx1 - fx1) * ratio
                 y1 = fy1 + (ty1 - fy1) * ratio
                 x2 = fx2 + (tx2 - fx2) * ratio
                 y2 = fy2 + (ty2 - fy2) * ratio
-                break
+                return x1, y1, x2, y2
+            elif now < seg["start"]:
+                return seg["from"]
+        # 超過最後一段
+        return segments[-1]["to"] if segments else (line["x1"], line["y1"], line["x2"], line["y2"])
+    
+    def get_current_play_time(self):
+        return (time.time() - self.start_time - self.total_pause_duration) * 1000
 
-        # 畫出線
+
+    def create_line(self, line, now):
+        if self.paused or not self.canvas.winfo_exists():
+            return
+
+        if now > line["end_time"]:
+            print(f"[line] Skip expired line {line['id']}")
+            line["expired"] = True
+            return
+
+        segments = self.build_segments(line)
+        x1, y1, x2, y2 = self.get_position_from_segments(segments, now, line)
+
         canvas_id = self.canvas.create_line(x1, y1, x2, y2, fill="#FFD700", width=4)
         line["current_id"] = canvas_id
         line["created"] = True
 
-        # 啟動動畫
-        if not hasattr(self, 'lines_animation_started'):
-            self.lines_animation_started = True
-            self.move_lines()
-
     def move_lines(self):
-        if self.paused:
-            # 暫停時不更新動畫，但持續呼叫自己以便等待恢復
+        if self.paused or not self.canvas.winfo_exists():
             self.root.after(16, self.move_lines)
             return
 
-        # 計算目前時間，扣除總暫停時間
-        now = (time.time() - self.start_time - self.total_pause_duration) * 1000  # 毫秒
         now = self.get_game_time() * 1000
+        print(f"[DEBUG] time={now:.1f}ms")
         for line in self.lines:
             if line.get("expired"):
                 continue
 
-            if not (line["time"] <= now <= line["end_time"]):
-                if now > line["end_time"] and line.get("current_id"):
-                    self.canvas.delete(line["current_id"])
-                    line["current_id"] = None
-                    line["expired"] = True
-                    print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
-                continue
+            # 若該建立但尚未建立，現在即時建立
+            if not line.get("created") and now >= line["time"]:
+                self.create_line(line, now)
 
+            # 若還沒建立，跳過後續動畫更新
             if not line.get("created"):
                 continue
 
+            # 超時刪除
+            if now > line["end_time"]:
+                self.remove_line(line)
+                line["expired"] = True
+                continue
+
+            # 更新位置
             segments = self.build_segments(line)
-
-            x1, y1, x2, y2 = segments[-1]["to"] if segments else (line["x1"], line["y1"], line["x2"], line["y2"])
-
-            for seg in segments:
-                if seg["start"] <= now <= seg["end"]:
-                    duration = max(seg["end"] - seg["start"], 1)
-                    ratio = (now - seg["start"]) / duration
-                    fx1, fy1, fx2, fy2 = seg["from"]
-                    tx1, ty1, tx2, ty2 = seg["to"]
-                    x1 = fx1 + (tx1 - fx1) * ratio
-                    y1 = fy1 + (ty1 - fy1) * ratio
-                    x2 = fx2 + (tx2 - fx2) * ratio
-                    y2 = fy2 + (ty2 - fy2) * ratio
-                    break
+            x1, y1, x2, y2 = self.get_position_from_segments(segments, now, line)
 
             if line.get("current_id"):
-                self.canvas.coords(line["current_id"], x1, y1, x2, y2)
+                try:
+                    self.canvas.coords(line["current_id"], x1, y1, x2, y2)
+                except tk.TclError:
+                    line["expired"] = True  # 畫布已刪除
+                    print(f"[line] Error updating {line['id']}")
 
         self.root.after(16, self.move_lines)
+
 
     def build_segments(self, line):
         base = (line["x1"], line["y1"], line["x2"], line["y2"])
@@ -873,9 +868,17 @@ class TaikoGame:
         return segments
 
     def remove_line(self, line):
+        if not self.canvas.winfo_exists():
+            return  # 畫布不存在，不做任何操作
+
         if "current_id" in line and line["current_id"]:
-            self.canvas.delete(line["current_id"])
-            print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
+            try:
+                self.canvas.delete(line["current_id"])
+                print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
+            except tk.TclError:
+                print(f"[line] Attempted to delete invalid line {line['id']}, but it was already gone.")
+            finally:
+                line["current_id"] = None  # 確保不會再被引用
 
     def start_game(self, is_use_mv):
         def contain():
@@ -885,7 +888,7 @@ class TaikoGame:
             self.schedule_drums()
             self.update_time_text()
             self.load_lines()
-            self.schedule_lines()
+            self.move_lines()
             self.move_drums()
         
         if is_use_mv:
@@ -913,12 +916,13 @@ class TaikoGame:
         now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
         now = self.get_game_time() * 1000
         next_note_time = self.chart[0]['time'] if self.chart else None
-        #print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
-        for note in self.chart:
-            if note['time'] <= now:
+        # print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
+        for note in self.chart[:]:  # 迭代副本以允許移除
+            if not note.get("spawned") and now >= note["time"]:
                 self.spawn_drum(note)
+                note["spawned"] = True
                 self.chart.remove(note)
-        self.drum_timer_id = self.root.after(50, self.schedule_drums)
+        self.drum_timer_id = self.root.after(16, self.schedule_drums)
 
     def spawn_drum(self, note):
         drum_type = note['type']
@@ -999,11 +1003,12 @@ class TaikoGame:
             return
 
         if self.paused:
-            self.root.after(30, self.move_drums)
+            self.root.after(16, self.move_drums)
             return
 
         now = int((time.time() - self.total_pause_duration - self.start_time) * 1000)
         now = self.get_game_time() * 1000
+        print(f"[DEBUG] time={now:.1f}ms")
         new_drums = []
         missed_drums = []
 
@@ -1029,7 +1034,7 @@ class TaikoGame:
             drum['last_x'] = x
             drum['last_y'] = y
 
-            if now > t1 + 200:  # 超過擊打時間
+            if now > t1 + 50:  # 超過擊打時間
                 missed_drums.append(drum)
             else:
                 new_drums.append(drum)
@@ -1045,7 +1050,7 @@ class TaikoGame:
         self.drums = new_drums
 
         self.check_game_over()
-        self.move_timer_id = self.root.after(30, self.move_drums)
+        self.move_timer_id = self.root.after(16, self.move_drums)
 
     def hit_red(self, event):
         self.play_hit_sound('red')
