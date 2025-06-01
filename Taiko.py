@@ -1208,7 +1208,7 @@ class Osu:
 
         # 載入音效
         self.hit_sound = pygame.mixer.Sound(HIT_WAV)
-        self.beatmap = os.path.join(BEAT_MAP, song_name+'.json')
+        self.beatmap = os.path.join(BEAT_MAP, song_name+'_Osu.json')
         self.bgm = os.path.join(SONG_LIST, song_name+'.mp3')
 
         # 分數與 combo
