@@ -257,15 +257,15 @@ class MainMenu:
         self.blue_var = tk.StringVar()
 
         # 紅色標籤與欄位
-        self.red_label = tk.Label(self.root, text="紅色:", font=("Arial", 12), bg="black", fg="white")
-        self.red_label.place(x=WIDTH//2 - 120, y=HEIGHT//2 - 50)
+        self.red_label = tk.Label(self.root, text="按鍵1 (紅色):", font=("Arial", 12), bg="black", fg="white")
+        self.red_label.place(x=WIDTH//2 - 200, y=HEIGHT//2 - 50)
 
         self.red_entry = tk.Entry(self.root, font=("Arial", 12), textvariable=self.red_var, state="readonly")
         self.red_entry.place(x=WIDTH//2 - 60, y=HEIGHT//2 -50)
 
         # 藍色標籤與欄位
-        self.blue_label = tk.Label(self.root, text="藍色:", font=("Arial", 12), bg="black", fg="white")
-        self.blue_label.place(x=WIDTH//2 - 120, y=HEIGHT//2)
+        self.blue_label = tk.Label(self.root, text="按鍵2 (藍色):", font=("Arial", 12), bg="black", fg="white")
+        self.blue_label.place(x=WIDTH//2 - 200, y=HEIGHT//2)
 
         self.blue_entry = tk.Entry(self.root, font=("Arial", 12), textvariable=self.blue_var, state="readonly")
         self.blue_entry.place(x=WIDTH//2 - 60, y=HEIGHT//2)
@@ -590,6 +590,10 @@ class TaikoGame:
         # 分數與 combo
         self.score = 0
         self.combo = 0
+        self.max_combo = 0
+        self.perfect = 0
+        self.great = 0
+        self.miss = 0
         
         # 暫停按鈕
         self.back_btn = tk.Button(root, text="暫停", font=("Arial", 12), command=self.toggle_pause)
@@ -846,8 +850,8 @@ class TaikoGame:
             if self.is_use_mv:
                 self.cap.release()
             self.cleanup()
-            Score_Summary(self.root, self.score, self.combo, self.song_name, self.settings, 'Taiko', 
-                           self.is_use_mv)
+            Score_Summary(self.root, self.score, self.max_combo, [self.perfect, self.great, self.miss], 
+                          self.song_name, self.settings, 'Taiko', self.is_use_mv)
             
     def load_score(self, file):
         with open(file, 'r') as f:
@@ -1188,11 +1192,11 @@ class TaikoGame:
 
         # 刪除超時鼓
         for drum in missed_drums:
-            #self.canvas.itemconfig(self.judge_text, text='Miss')
             self.show_feedback("Miss", "red")
             for item_id in drum['id']:
                 self.canvas.delete(item_id)
             self.combo = 0
+            self.miss += 1
             self.update_score()
 
         self.drums = new_drums
@@ -1242,12 +1246,12 @@ class TaikoGame:
                             break
 
             for drum in to_remove:
-                #self.canvas.itemconfig(self.judge_text, text='Miss')
                 self.show_feedback("Miss", "red")
                 for item_id in drum['id']:
                     self.canvas.delete(item_id)
                 self.drums.remove(drum)
                 self.combo = 0
+                self.miss += 1
                 self.update_score()
             return
 
@@ -1285,7 +1289,6 @@ class TaikoGame:
                         matched_drums.append(drum)
 
         if matched_drums:
-            #self.canvas.itemconfig(self.judge_text, text='Perfect!')
             self.show_feedback("Perfect", "cyan")
             for drum in matched_drums:
                 self.show_hit_effect(drum['last_x'], drum['last_y'])  # ✅ 正確位置
@@ -1293,9 +1296,10 @@ class TaikoGame:
                     self.canvas.delete(item_id)
                 self.drums.remove(drum)
                 self.combo += 1
+                self.perfect += 1
+                self.max_combo = self.combo if self.combo > self.max_combo else self.max_combo
                 self.score += 100
         else:
-            #self.canvas.itemconfig(self.judge_text, text='Miss')
             self.show_feedback("Miss", "red")
             self.combo = 0
 
@@ -1355,6 +1359,8 @@ class TaikoGame:
         self.canvas.itemconfig(self.combo_text, text=f'{self.combo}')
 
     def cleanup(self):
+        if self.feedback_after_id:
+            self.root.after_cancel(self.feedback_after_id)
         self.canvas.destroy()
 
 class Osu:
@@ -1608,8 +1614,8 @@ class Osu:
             self.cleanup()
 
             # 呼叫 Osu 風格的結算畫面（你可以修改Score_Summary，或換成自己的結算畫面）
-            Score_Summary(self.root, self.score, self.max_combo, self.song_name, self.settings, 'Osu', 
-                           self.is_use_mv)
+            Score_Summary(self.root, self.score, self.max_combo, [self.perfect, self.great, self.miss], self.song_name,
+                                                 self.settings, 'Osu', self.is_use_mv)
         else:
             # 若還沒結束，繼續下一次檢查
             self.root.after(100, self.check_game_over)
@@ -1797,6 +1803,7 @@ class Osu:
                     print("Perfect!")
                     self.score += 100
                     self.combo += 1
+                    self.perfect += 1
                     if self.max_combo < self.combo:
                         self.max_combo = self.combo
                     self.notes.remove(note)
@@ -1809,6 +1816,7 @@ class Osu:
                     print("Great!")
                     self.score += 50
                     self.combo += 1
+                    self.great += 1
                     if self.max_combo < self.combo:
                         self.max_combo = self.combo
                     self.notes.remove(note)
@@ -1822,6 +1830,7 @@ class Osu:
             print("Miss click!")
             self.show_feedback("Miss click!", "red")
             self.combo = 0
+            self.miss += 1
             self.update_score()
 
     def show_feedback(self, text, color="yellow"):
@@ -1849,9 +1858,10 @@ class Osu:
         self.canvas.destroy()
 
 class Score_Summary:
-    def __init__(self, root, score, combo, song_name, settings, mode, is_use_mv=False):
+    def __init__(self, root, score, max_combo, combo, song_name, settings, mode, is_use_mv=False):
         self.root = root
         self.score = score
+        self.max_combo = max_combo
         self.combo = combo
         self.song_name = song_name
         self.beatmap_path = os.path.join(BEAT_MAP, song_name+'.json')
@@ -1866,15 +1876,22 @@ class Score_Summary:
 
         self.canvas.create_text(WIDTH // 2, 80, text="遊戲結束！", font=("Arial", 32, "bold"), fill="white")
         self.canvas.create_text(WIDTH // 2, 150, text=f"總分：{self.score}", font=("Arial", 24), fill="yellow")
-        self.canvas.create_text(WIDTH // 2, 200, text=f"最高連擊：{self.combo}", font=("Arial", 24), fill="lightblue")
+        self.canvas.create_text(WIDTH // 2, 200, text=f"最高連擊：{self.max_combo}", font=("Arial", 24), fill="lightblue")
 
         self.btn_menu = tk.Button(root, text="返回主選單", command=self.back_to_menu, font=("Arial", 14), bg="#2196F3", fg="white", width=15)
         self.btn_restart = tk.Button(root, text="重新開始", command=self.restart_game, font=("Arial", 14), bg="#4CAF50", fg="white", width=15)
         self.btn_exit = tk.Button(root, text="離開遊戲", command=root.quit, font=("Arial", 14), bg="#F44336", fg="white", width=15)
 
-        self.btn_menu.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 30)
-        self.btn_restart.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 80)
-        self.btn_exit.place(x=WIDTH//2 - 80, y=HEIGHT//2 + 130)
+        # 左側按鈕排列
+        btn_x = 50
+        self.btn_menu.place(x=btn_x, y=HEIGHT//2 + 30)
+        self.btn_restart.place(x=btn_x, y=HEIGHT//2 + 80)
+        self.btn_exit.place(x=btn_x, y=HEIGHT//2 + 130)
+        
+        # 右側顯示 Combo 統計
+        combo_text = f"Perfect: {self.combo[0]}\nGreat: {self.combo[1]}\nMiss: {self.combo[2]}"
+        self.canvas.create_text(WIDTH - 200, HEIGHT//2 + 80, text="成績統計", font=("Arial", 20, "bold"), fill="white")
+        self.canvas.create_text(WIDTH - 200, HEIGHT//2 + 130, text=combo_text, font=("Arial", 16), fill="lightgreen")
 
     def back_to_menu(self):
         self.destroy()
