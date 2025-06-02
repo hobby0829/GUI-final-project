@@ -896,26 +896,24 @@ class TaikoGame:
             return
 
         now = self.get_game_time() * 1000
-        print(f"[DEBUG] time={now:.1f}ms")
+        # print(f"[DEBUG] time={now:.1f}ms")
         for line in self.lines:
             if line.get("expired"):
                 continue
 
-            # 若該建立但尚未建立，現在即時建立
             if not line.get("created") and now >= line["time"]:
                 self.create_line(line, now)
 
-            # 若還沒建立，跳過後續動畫更新
             if not line.get("created"):
                 continue
 
-            # 超時刪除
-            if now > line["end_time"]:
+            fade_duration = 300
+            if now > line["end_time"] - fade_duration and not line.get("fading"):
+                line["fading"] = True
                 self.remove_line(line)
-                line["expired"] = True
-                continue
+                continue  # 不再更新座標
 
-            # 更新位置
+            # 正常更新位置
             segments = self.build_segments(line)
             x1, y1, x2, y2 = self.get_position_from_segments(segments, now, line)
 
@@ -923,7 +921,7 @@ class TaikoGame:
                 try:
                     self.canvas.coords(line["current_id"], x1, y1, x2, y2)
                 except tk.TclError:
-                    line["expired"] = True  # 畫布已刪除
+                    line["expired"] = True
                     print(f"[line] Error updating {line['id']}")
 
         self.root.after(16, self.move_lines)
@@ -969,16 +967,48 @@ class TaikoGame:
 
     def remove_line(self, line):
         if not self.canvas.winfo_exists():
-            return  # 畫布不存在，不做任何操作
+            return
 
         if "current_id" in line and line["current_id"]:
             try:
-                self.canvas.delete(line["current_id"])
-                print(f"[line] Removed line {line['id']} at {line['end_time']}ms")
+                self.fade_out_line(line, step=0)
             except tk.TclError:
                 print(f"[line] Attempted to delete invalid line {line['id']}, but it was already gone.")
-            finally:
-                line["current_id"] = None  # 確保不會再被引用
+                # 不在這裡清除 current_id，交給 fade_out_line 最後一步
+    
+    def fade_out_line(self, line, step):
+        if not self.canvas.winfo_exists() or not line.get("current_id"):
+            return
+
+        # 總共10步，每步透明度遞減
+        total_steps = 10
+        delay = 30  # 每步延遲毫秒數
+
+        # 計算新的顏色（簡單地從金色淡出到黑色）
+        def get_fade_color(step):
+            ratio = (total_steps - step) / total_steps
+            r = int(255 * ratio)
+            g = int(215 * ratio)
+            b = 0  # 金色的B是0
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        if step < total_steps:
+            color = get_fade_color(step)
+            try:
+                self.canvas.itemconfig(line["current_id"], fill=color)
+            except tk.TclError:
+                line["current_id"] = None
+                line["expired"] = True
+                return
+            self.root.after(delay, lambda: self.fade_out_line(line, step + 1))
+        else:
+            try:
+                self.canvas.delete(line["current_id"])
+                print(f"[line] Faded out and removed line {line['id']} at {line['end_time']}ms")
+            except tk.TclError:
+                print(f"[line] Failed to delete line {line['id']} after fade")
+            line["current_id"] = None
+            line["expired"] = True
 
     def start_game(self, is_use_mv):
         def contain():
@@ -1042,21 +1072,34 @@ class TaikoGame:
 
         # 畫外框
         border_id = self.canvas.create_rectangle(
-            x, y - height // 2, x + width, y + height // 2,
+            x - width//2 , y - height // 2, x + width//2, y + height // 2,
             outline=border_color, width=2, fill=""
         )
         drum_ids.append(border_id)
 
         # 畫漸層
-        step_height = height // len(gradient_colors)
-        for i, color in enumerate(gradient_colors):
-            step_y1 = y - height // 2 + i * step_height
-            step_y2 = step_y1 + step_height
-            rect_id = self.canvas.create_rectangle(
-                x + 2, step_y1, x + width - 2, step_y2,
-                outline="", fill=color
-            )
-            drum_ids.append(rect_id)
+        if width > height:
+            # 水平鼓，橫向漸層
+            step_width = width // len(gradient_colors)
+            for i, color in enumerate(gradient_colors):
+                step_x1 = x - width // 2 + i * step_width
+                step_x2 = step_x1 + step_width
+                rect_id = self.canvas.create_rectangle(
+                    step_x1, y - height // 2 + 2, step_x2, y + height // 2 - 2,
+                    outline="", fill=color
+                )
+                drum_ids.append(rect_id)
+        else:
+            # 垂直鼓，直向漸層
+            step_height = height // len(gradient_colors)
+            for i, color in enumerate(gradient_colors):
+                step_y1 = y - height // 2 + i * step_height
+                step_y2 = step_y1 + step_height
+                rect_id = self.canvas.create_rectangle(
+                    x - width // 2 + 2, step_y1, x + width // 2 - 2, step_y2,
+                    outline="", fill=color
+                )
+                drum_ids.append(rect_id)
 
         # 🔧 改為使用 note 本身的時間，不用即時計算 now
         start_time = note['time']
