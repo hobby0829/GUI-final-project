@@ -2,10 +2,10 @@ import os                           # 對路徑做一頓操作
 import tkinter as tk                # 核心
 from tkinter import messagebox      # messagebox
 import json                         # 遊戲資料的儲存格式
-#import time                         # 
-import pygame                       # 
-import cv2                          # 
-from PIL import Image, ImageTk      # 
+import pygame                       # 播放音樂、獲取音樂進行時間
+import cv2                          # 讀取影片檔，播放MV
+from PIL import Image, ImageTk      # 將影片的 frame 轉為 ImageTk
+import time
 
 WIDTH = 800
 HEIGHT = 400
@@ -19,7 +19,7 @@ HIT_WAV = "assets/sound/hit.mp3"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
-BGM_MENU = os.path.join(SONG_LIST, files[0])
+BGM_MENU = os.path.join(SONG_LIST, files[2])
 SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
 SETTINGS = "assets/settings.json"
@@ -76,9 +76,10 @@ class GameSettings:
                 json.dump(data, f, indent=4, ensure_ascii=False)
         except Exception as e:
             print("寫入設定檔時發生錯誤：", e)
-
+        
 class MainMenu:
-    def __init__(self, root, settings):
+    def __init__(self, root, settings):          
+
         self.root = root
         self.settings = settings
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='lightblue')
@@ -88,27 +89,126 @@ class MainMenu:
         self.bgm = BGM_MENU
         self.play_bgm()
 
-        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="節奏遊戲", font=("Arial", 32, "bold"))
+        # 陰影（稍微偏移，深灰色）
+        self.canvas.create_text(WIDTH//2 + 2, HEIGHT//2 - 100 + 2,
+                                text="節奏遊戲", font=("Arial", 32, "bold"),
+                                fill="gray")
 
-        self.start_btn = tk.Button(root, text="開始遊戲", font=("Arial", 16), command=self.start_game)
+        # 正文（上層，白色或亮色）
+        self.title = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100,
+                                             text="節奏遊戲", font=("Arial", 32, "bold"),
+                                             fill="white")
+
+
+        self.canvas.bind("<Button-1>", self.handle_click)
         self.quit_btn = tk.Button(root, text="選單", font=("Arial", 16), command=self.show_options_menu)
+        self.quit_btn.place(x=WIDTH - 70, y = 20)  # 右上角，微調位置
 
-        self.start_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2)
-        self.quit_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 50)
+        # 半透明矩形背景（下半部）
+        self.tap_hint_rect = self.canvas.create_rectangle(
+            WIDTH * 0.2, HEIGHT * 0.75, WIDTH * 0.8, HEIGHT * 0.85,
+            fill='#000000', stipple='gray50', outline=''
+        )
+        # 提示文字
+        self.tap_hint_text = self.canvas.create_text(
+            WIDTH // 2, int(HEIGHT * 0.8),
+            text="點擊畫面開始遊戲", font=("Arial", 18), fill='white'
+        )
+        # 閃爍狀態開關
+        self.tap_hint_visible = True
+        # 啟動閃爍效果
+        self.blink_hint()
+
+        self.MV_name = '封面'
+        # 載入影片
+        
+        self.video_path = os.path.join(MV, self.MV_name + '.mp4')
+        self.cap = cv2.VideoCapture(self.video_path)
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.frame_interval = int(1000 / self.fps)
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.image_on_canvas = None
+        self.running = True
+        self.current_frame = 0
+        self.update_mv_timer_id = None
+        self.speed_multiplier = 5 # 幾倍速
+        self.start_time = time.time()
+        self.update_mv_frame()
+
+    def blink_hint(self):
+        if not self.canvas.winfo_exists():
+            return
+        
+        if self.tap_hint_visible:
+            self.canvas.itemconfigure(self.tap_hint_text, state='hidden')
+        else:
+            self.canvas.itemconfigure(self.tap_hint_text, state='normal')
+
+        self.tap_hint_visible = not self.tap_hint_visible
+        self.root.after(800, self.blink_hint)  # 每 500ms 閃爍一次
+
+    def update_mv_frame(self):
+        if not self.running or not self.canvas.winfo_exists():
+            return
+
+        elapsed_time = time.time() - self.start_time  # 秒
+        expected_frame = int(elapsed_time * self.fps)
+
+        ret = False  # 預設
+        while self.current_frame < expected_frame:
+            for _ in range(self.speed_multiplier):  # 例如 2 倍速
+                ret, frame = self.cap.read()
+                if not ret:
+                    # 循環：重設影片為開頭
+                    self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    self.start_time = time.time()  # 重設時間軸起點！
+                    self.current_frame = 0
+                    elapsed_time = time.time() - self.start_time  # 秒
+                    expected_frame = int(elapsed_time * self.fps)
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        print("錯誤：影片無法重播")
+                        return
+            self.current_frame += 1
+
+        if ret:
+            frame = cv2.resize(frame, (800, 400))  # 調整畫面大小
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(frame)
+            photo = ImageTk.PhotoImage(image)
+
+            if self.image_on_canvas is None:
+                self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
+                self.canvas.tag_lower(self.image_on_canvas)
+            else:
+                self.canvas.itemconfig(self.image_on_canvas, image=photo)
+
+            self.canvas.image = photo
+
+        self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
+
+    def handle_click(self, event):
+        # 只有點擊 canvas 本身才會觸發
+        if event.widget == self.canvas:
+            self.start_game()
 
     def start_game(self):
-        self.start_btn.place_forget()
         self.quit_btn.place_forget()
+        self.canvas.unbind("<Button-1>")
+        # 隱藏提示用的圖形與文字
+        self.canvas.delete(self.tap_hint_text)
+        self.canvas.delete(self.tap_hint_rect)
+        if self.update_mv_timer_id:
+            self.root.after_cancel(self.update_mv_timer_id)
         self.canvas.destroy()
         SongSelect(self.root, self.settings)
-
 
     def play_bgm(self):
         pygame.mixer.music.load(self.bgm)
         pygame.mixer.music.set_volume(self.settings.volume / 100)
         pygame.mixer.music.play()
     
-
     def show_options_menu(self):
         # 建立半透明遮罩與標題
         self.hide_pause_buttons()
@@ -206,7 +306,6 @@ class MainMenu:
         self.hide_keybind_controls()
         self.show_options_menu()
     
-    
     def save_keybinds(self):
         red_key = self.red_var.get().strip()
         blue_key = self.blue_var.get().strip()
@@ -227,8 +326,7 @@ class MainMenu:
         self.quit_btn.place_forget()
 
     def restore_pause_buttons(self):
-        self.start_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2)
-        self.quit_btn.place(x=WIDTH//2 - 60, y=HEIGHT//2 + 50)
+        self.quit_btn.place(x=WIDTH - 70, y = 20)  # 右上角，微調位置
 
     def hide_options_menu(self):
         if self.options_overlay:
@@ -269,6 +367,8 @@ class SongSelect:
         self.default_song = ''
         self.bgm = ''
         self.mv_able = False
+
+        self.selection_indicator = None  # 加在 __init__ 或適當位置
 
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='#1e1e1e')
         self.canvas.pack()
@@ -326,16 +426,33 @@ class SongSelect:
             self.song_buttons.append(btn)
         self.confirm_song(self.default_song, self.settings)
     
-
     def confirm_song(self, song, settings):
 
         def select_mode_canvas(mode):
             self.selected_mode = mode
-            # 更新圓形按鈕顏色
-            mode_canvas.itemconfig(mode_circles['taiko'],
-                                        fill="#f44336" if mode == 'taiko' else "#555555")
-            mode_canvas.itemconfig(mode_circles['Osu'],
-                                        fill="#4CAF50" if mode == 'Osu' else "#555555")
+            # 重新繪製按鈕顏色
+            mode_canvas.itemconfig(taiko_circle, fill="#f44336" if mode == 'taiko' else "#555555")
+            mode_canvas.itemconfig(Osu_circle, fill="#4CAF50" if mode == 'Osu' else "#555555")
+
+            # 移除原本的指示三角形（如果有）
+            if self.selection_indicator:
+                mode_canvas.delete(self.selection_indicator)
+
+            # 決定三角形位置
+            if mode == 'taiko':
+                cx = 45  # 圓心 x 座標
+            else:
+                cx = 145
+
+            # 畫一個朝上的三角形
+            triangle_points = [
+                cx - 10, 85,  # 左下
+                cx + 10, 85,  # 右下
+                cx, 70        # 上尖角
+            ]
+            self.selection_indicator = mode_canvas.create_polygon(
+                triangle_points, fill="white", outline=""
+            )
             
         self.clear_info_panel()
         self.mode_buttons.clear()
@@ -387,6 +504,8 @@ class SongSelect:
         mode_canvas.tag_bind(Osu_circle, "<Button-1>", lambda e: select_mode_canvas('Osu'))
         mode_canvas.tag_bind(Osu_text, "<Button-1>", lambda e: select_mode_canvas('Osu'))
 
+        select_mode_canvas('taiko')
+
         # 儲存圖形 id，以便切換顏色用
         mode_circles = {
             'taiko': taiko_circle,
@@ -421,16 +540,6 @@ class SongSelect:
         
         confirm_btn.place(x=WIDTH//2 + 100, y=HEIGHT//4 + 250)
         self.info_widgets.append(confirm_btn)
-
-    def select_mode(self, mode):
-        self.selected_mode = mode
-        # 更新按鈕顏色
-        for btn in self.mode_buttons:
-            text = btn.cget("text")
-            if text == "太鼓模式":
-                btn.config(bg="#f44336" if mode == 'taiko' else "#555555")
-            elif text == "Osu模式":
-                btn.config(bg="#4CAF50" if mode == 'Osu' else "#555555")
 
     def switch_MV(self, btn):
         if self.mv_able == False:
@@ -1321,7 +1430,6 @@ class Osu:
 
         self.cleanup()
         
-
         # 建立新的 Osu 實例來重啟遊戲
         Osu(self.root, self.song_name, self.settings, self.is_use_mv)
 
