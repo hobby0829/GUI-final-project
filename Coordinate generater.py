@@ -3,7 +3,7 @@ import math
 import random
 
 BEAT_MAP = "assets/beatmap"
-SONG = 'Ave Mujica'
+SONG = 'WATER_Osu'
 
 json_path = BEAT_MAP + '/' + SONG + '.json'
 with open(json_path, "r", encoding="utf-8") as f:

@@ -19,7 +19,7 @@ HIT_WAV = "assets/sound/hit.mp3"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
-BGM_MENU = os.path.join(SONG_LIST, files[2])
+BGM_MENU = os.path.join(SONG_LIST, files[3])
 SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
 SETTINGS = "assets/settings.json"
@@ -322,7 +322,6 @@ class MainMenu:
             messagebox.showwarning("錯誤", "請按下有效按鍵")
     
     def hide_pause_buttons(self):
-        self.start_btn.place_forget()
         self.quit_btn.place_forget()
 
     def restore_pause_buttons(self):
@@ -596,13 +595,25 @@ class TaikoGame:
         self.back_btn = tk.Button(root, text="暫停", font=("Arial", 12), command=self.toggle_pause)
         self.back_btn.place(x=750, y=10)
 
-        # 顯示文字
-        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
-        self.combo_text = self.canvas.create_text(10, 40, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
-        self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
+        # 分數陰影
+        self.shadow1 = self.canvas.create_text(12, 12, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='black')
+        self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='white')
 
-        # 判定線
-        # self.canvas.create_line(JUDGE_LINE, 0, JUDGE_LINE, HEIGHT, fill='gray', dash=(4, 2))
+        # 連擊陰影
+        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='0', font=('Arial', 20, 'bold'), fill='black')
+        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='0', font=('Arial', 20, 'bold'), fill='orange')
+        self.canvas.create_text(WIDTH//2 - 10 + 2, 37, anchor='nw', text='combo', font=('Arial', 8, 'bold'), fill='black')
+        self.canvas.create_text(WIDTH//2 - 10 , 35, anchor='nw', text='combo', font=('Arial', 8, 'bold'), fill='orange')
+
+        # 分隔線位置（可微調）
+        separator_y = 50
+
+        # 畫一條細細的灰色水平線（線寬1像素）
+        self.canvas.create_line(0, separator_y, WIDTH, separator_y, fill='gray70', width=1)
+
+        #self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
+        self.feedback_text = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="", font=("Arial", 28, "bold"), fill="yellow", tags="ui")
+        self.feedback_after_id = None
 
         # 鼓列表與開始時間
         self.drums = []
@@ -688,7 +699,7 @@ class TaikoGame:
         else:
             # 第一次畫出時間文字
             self.time_text_id = self.canvas.create_text(
-                100, 30, text=f"音樂時間：{display_time}",
+                WIDTH//8 * 5, 30, text=f"音樂時間：{display_time}",
                 fill="white", font=("Arial", 16, "bold"), anchor="w"
             )
 
@@ -873,7 +884,6 @@ class TaikoGame:
         # 超過最後一段
         return segments[-1]["to"] if segments else (line["x1"], line["y1"], line["x2"], line["y2"])
 
-
     def create_line(self, line, now):
         if self.paused or not self.canvas.winfo_exists():
             return
@@ -925,7 +935,6 @@ class TaikoGame:
                     print(f"[line] Error updating {line['id']}")
 
         self.root.after(16, self.move_lines)
-
 
     def build_segments(self, line):
         base = (line["x1"], line["y1"], line["x2"], line["y2"])
@@ -1179,7 +1188,8 @@ class TaikoGame:
 
         # 刪除超時鼓
         for drum in missed_drums:
-            self.canvas.itemconfig(self.judge_text, text='Miss')
+            #self.canvas.itemconfig(self.judge_text, text='Miss')
+            self.show_feedback("Miss", "red")
             for item_id in drum['id']:
                 self.canvas.delete(item_id)
             self.combo = 0
@@ -1232,7 +1242,8 @@ class TaikoGame:
                             break
 
             for drum in to_remove:
-                self.canvas.itemconfig(self.judge_text, text='Miss')
+                #self.canvas.itemconfig(self.judge_text, text='Miss')
+                self.show_feedback("Miss", "red")
                 for item_id in drum['id']:
                     self.canvas.delete(item_id)
                 self.drums.remove(drum)
@@ -1274,7 +1285,8 @@ class TaikoGame:
                         matched_drums.append(drum)
 
         if matched_drums:
-            self.canvas.itemconfig(self.judge_text, text='Perfect!')
+            #self.canvas.itemconfig(self.judge_text, text='Perfect!')
+            self.show_feedback("Perfect", "cyan")
             for drum in matched_drums:
                 self.show_hit_effect(drum['last_x'], drum['last_y'])  # ✅ 正確位置
                 for item_id in drum['id']:
@@ -1283,17 +1295,23 @@ class TaikoGame:
                 self.combo += 1
                 self.score += 100
         else:
-            self.canvas.itemconfig(self.judge_text, text='Miss')
+            #self.canvas.itemconfig(self.judge_text, text='Miss')
+            self.show_feedback("Miss", "red")
             self.combo = 0
 
         self.update_score()
-
-
-        ## 沒有鼓在範圍內也 Miss
-        #self.canvas.itemconfig(self.judge_text, text='Miss')
-        #self.combo = 0
-        #self.update_score()
     
+    def show_feedback(self, text, color="yellow"):
+        # 如果之前有排程自動清除 feedback，先取消
+        if self.feedback_after_id:
+            self.root.after_cancel(self.feedback_after_id)
+
+        # 更新畫面文字
+        self.canvas.itemconfigure(self.feedback_text, text=text, fill=color)
+
+        # 安排新的清除任務，並記錄 ID
+        self.feedback_after_id = self.root.after(500, lambda: self.canvas.itemconfigure(self.feedback_text, text=""))
+
     def show_hit_effect(self, x, y, color="#FFFF00", max_radius=30, duration=200):
 
         rect = self.canvas.create_rectangle(
@@ -1334,7 +1352,7 @@ class TaikoGame:
 
     def update_score(self):
         self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
-        self.canvas.itemconfig(self.combo_text, text=f'Combo: {self.combo}')
+        self.canvas.itemconfig(self.combo_text, text=f'{self.combo}')
 
     def cleanup(self):
         self.canvas.destroy()
@@ -1362,18 +1380,22 @@ class Osu:
         self.combo = 0
         self.max_combo = self.combo
         self.time_text_id = None
-        # 顯示文字
-        #self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16), fill='white')
-        #self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='Combo: 0', font=('Arial', 16), fill='white')
+
         # 分數陰影
         self.shadow1 = self.canvas.create_text(12, 12, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='black')
         self.score_text = self.canvas.create_text(10, 10, anchor='nw', text='Score: 0', font=('Arial', 16, 'bold'), fill='white')
 
         # 連擊陰影
-        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='0\nCombo', font=('Arial', 16, 'bold'), fill='black')
-        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='0\nCombo', font=('Arial', 16, 'bold'), fill='orange')
+        self.shadow2 = self.canvas.create_text(WIDTH//2 + 2, 12, anchor='nw', text='0', font=('Arial', 20, 'bold'), fill='black')
+        self.combo_text = self.canvas.create_text(WIDTH//2, 10, anchor='nw', text='0', font=('Arial', 20, 'bold'), fill='orange')
+        self.canvas.create_text(WIDTH//2 - 10 + 2, 37, anchor='nw', text='combo', font=('Arial', 8, 'bold'), fill='black')
+        self.canvas.create_text(WIDTH//2 - 10 , 35, anchor='nw', text='combo', font=('Arial', 8, 'bold'), fill='orange')
 
-        self.judge_text = self.canvas.create_text(WIDTH // 2, 50, text='', font=('Arial', 24), fill='red')
+        # 分隔線位置（可微調）
+        separator_y = 50
+
+        # 畫一條細細的灰色水平線（線寬1像素）
+        self.canvas.create_line(0, separator_y, WIDTH, separator_y, fill='gray70', width=1)
         
         # 暫停按鈕
         self.back_btn = tk.Button(root, text="暫停", font=("Arial", 12), command=self.toggle_pause)
@@ -1413,7 +1435,7 @@ class Osu:
         self.volume_slider.place_forget()
 
         self.note_id_text = self.canvas.create_text(WIDTH//2, HEIGHT//2, text="", font=("Arial", 20, "bold"), fill="red", tags="ui")
-        self.feedback_text = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 150, text="", font=("Arial", 28, "bold"), fill="yellow", tags="ui")
+        self.feedback_text = self.canvas.create_text(WIDTH//2, HEIGHT//2 - 100, text="", font=("Arial", 28, "bold"), fill="yellow", tags="ui")
         self.feedback_after_id = None
 
         self.settings = settings
@@ -1433,7 +1455,7 @@ class Osu:
             self.current_frame = 0
 
         self.root.bind("<KeyPress-p>", self.toggle_pause_key)
-        self.root.bind("<KeyPress-z>", self.handle_key_z)
+        self.root.bind(self.settings.red_button, self.handle_key_z)
         self.set_volume(settings.volume)
         self.load_music()
         self.load_score()
@@ -1503,7 +1525,7 @@ class Osu:
         else:
             # 第一次畫出時間文字
             self.time_text_id = self.canvas.create_text(
-                100, 30, text=f"音樂時間：{display_time}",
+                WIDTH//8 * 5, 30, text=f"音樂時間：{display_time}",
                 fill="white", font=("Arial", 16, "bold"), anchor="w"
             )
 
@@ -1543,8 +1565,8 @@ class Osu:
     def update_score(self):
         self.canvas.itemconfig(self.score_text, text=f'Score: {self.score}')
         self.canvas.itemconfig(self.shadow1, text=f'Score: {self.score}')
-        self.canvas.itemconfig(self.combo_text, text=f'{self.combo}\nCombo')
-        self.canvas.itemconfig(self.shadow2, text=f'{self.combo}\nCombo')
+        self.canvas.itemconfig(self.combo_text, text=f'{self.combo}')
+        self.canvas.itemconfig(self.shadow2, text=f'{self.combo}')
         
     def check_game_over(self):
 
@@ -1616,13 +1638,13 @@ class Osu:
 
             if self.image_on_canvas is None:
                 self.image_on_canvas = self.canvas.create_image(0, 0, anchor='nw', image=photo)
-                self.canvas.tag_lower(self.image_on_canvas)
+                self.canvas.tag_lower(self.image_on_canvas) # 放置最底層
             else:
                 self.canvas.itemconfig(self.image_on_canvas, image=photo)
 
-            self.canvas.image = photo
+            self.canvas.image = photo # 防止 Python 的垃圾回收機制會自動刪除沒有引用的物件
 
-        self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame)
+        self.update_mv_timer_id = self.root.after(self.frame_interval, self.update_mv_frame) # 為了更好追蹤 賦予其變數名稱
 
     def play_bgm(self):
         
@@ -1662,11 +1684,11 @@ class Osu:
         # 添加新 notes 到畫面
         for note in self.chart[:]:
             if note['time'] - SPAWN_OFFSET * 1000 <= now:
-                note['spawn_time'] = note['time'] - SPAWN_OFFSET * 1000  # 加入生成時間
+                note['spawn_time'] = note['time'] - SPAWN_OFFSET * 1000  # 生成時間
                 self.notes.append(note)
                 self.chart.remove(note)
 
-         # 先排序 notes，找出未來三個最近的 note
+        # 先排序 notes，找出最近的 note
         notes_sorted = sorted(self.notes, key=lambda n: n['time'])
         future_notes = [note for note in notes_sorted if note['time'] >= now]
     
@@ -1737,11 +1759,14 @@ class Osu:
             # 顯示閃爍外圈（加強提示）
             if note == next_note:
                 canvas_ids = self.canvas.find_withtag(f"note_id_{next_note['id']}")
-                self.canvas.itemconfigure(canvas_ids, fill="red") 
+                for cid in canvas_ids:
+                    self.canvas.itemconfigure(cid, fill="red") 
 
             elif note == next_next_note:
                 canvas_ids = self.canvas.find_withtag(f"note_id_{next_next_note['id']}")
-                self.canvas.itemconfigure(canvas_ids, fill="orange") 
+                for cid in canvas_ids:
+                    self.canvas.itemconfigure(cid, fill="orange")
+
 
             #elif note == next_next_next_note:
             #    canvas_ids = self.canvas.find_withtag(f"note_id_{next_next_next_note['id']}")
@@ -1813,7 +1838,7 @@ class Osu:
     def cleanup(self):
         self.canvas.unbind("<Button-1>")
         self.root.unbind("<KeyPress-p>")
-        self.root.unbind("<KeyPress-z>")
+        self.root.unbind(self.settings.red_button)
         
         if self.update_mv_timer_id:
             self.root.after_cancel(self.update_mv_timer_id)

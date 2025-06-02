@@ -1,7 +1,7 @@
 import json
 import random
 
-path = 'assets\\beatmap\\春日影.json'
+path = 'assets\\beatmap\\WATER copy.json'
 outpath = path
 # 讀取原始 JSON 資料
 with open(path, "r", encoding="utf-8") as f:
@@ -9,7 +9,7 @@ with open(path, "r", encoding="utf-8") as f:
 
 # 對每筆資料加上固定欄位
 for item in data:
-    item["time"] = max(0, item["time"]-item["move_time"])
+    item["time"] = max(0, item["time"]+item["move_time"])
     # item["judge_point"] = [100, 200]  # 你可以換成你要加的欄位名稱與內容
     # item["start_x"], item["end_x"] = (500, 300)
 # 
