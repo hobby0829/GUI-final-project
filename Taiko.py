@@ -6,12 +6,14 @@ import pygame                       # 播放音樂、獲取音樂進行時間
 import cv2                          # 讀取影片檔，播放MV
 from PIL import Image, ImageTk      # 將影片的 frame 轉為 ImageTk
 import time
+import math
 
 WIDTH = 800
 HEIGHT = 400
 DRUM_SPEED = 5
 JUDGE_LINE = 100
-HIT_RANGE = 50
+HIT_RANGE_PERFECT = 30
+HIT_RANGE_GREAT   = 60
 
 HIT_WAV_RED = "assets/sound/hit_red.wav"
 HIT_WAV_BLUE = "assets/sound/hit_blue.mp3"
@@ -19,7 +21,7 @@ HIT_WAV = "assets/sound/hit.mp3"
 BEAT_MAP = "assets/beatmap"
 SONG_LIST = "assets/song"
 files = os.listdir(SONG_LIST)
-BGM_MENU = os.path.join(SONG_LIST, files[3])
+BGM_MENU = os.path.join(SONG_LIST, files[2])
 SCORE_LIST = "assets/score.json"
 MV = "assets/MV"
 SETTINGS = "assets/settings.json"
@@ -895,7 +897,7 @@ class TaikoGame:
                     line['created'] = False
                     line['expired'] = False
                     self.lines.append(line)
-                print(f"[line] Loaded {len(self.lines)} lines (with movement support)")
+                # print(f"[line] Loaded {len(self.lines)} lines")
         except Exception as e:
             print(f"[line] Failed to load lines: {e}")
 
@@ -972,7 +974,7 @@ class TaikoGame:
         movements = line.get("movement", [])
         segments = []
 
-        # 處理開頭靜止段（從 base 到第一段動畫起始前）
+        # 開頭靜止的部分
         prev_end_pos = base
         if not movements or movements[0]["start"] > line["time"]:
             first_time = movements[0]["start"] if movements else line["end_time"]
@@ -983,18 +985,18 @@ class TaikoGame:
                 "to": base
             })
 
-        # 處理動畫段
+        # 中間移動的部分
         for move in movements:
             seg = {
                 "start": move["start"],
                 "end": move["end"],
-                "from": prev_end_pos,  # 關鍵：從上一段的 to 開始
+                "from": prev_end_pos,
                 "to": (move["x1"], move["y1"], move["x2"], move["y2"])
             }
             segments.append(seg)
-            prev_end_pos = seg["to"]  # 更新為正確的下一段起點
+            prev_end_pos = seg["to"]
 
-        # 補尾靜止段
+        # 最後靜止的部分
         if movements and movements[-1]["end"] < line["end_time"]:
             segments.append({
                 "start": movements[-1]["end"],
@@ -1044,7 +1046,7 @@ class TaikoGame:
         else:
             try:
                 self.canvas.delete(line["current_id"])
-                print(f"[line] Faded out and removed line {line['id']} at {line['end_time']}ms")
+                # print(f"[line] Faded out and removed line {line['id']} at {line['end_time']}ms")
             except tk.TclError:
                 print(f"[line] Failed to delete line {line['id']} after fade")
             line["current_id"] = None
@@ -1082,7 +1084,7 @@ class TaikoGame:
             return
         
         now = self.get_game_time() * 1000
-        # print(f"[DEBUG] now={now}, next_hit_time={self.chart[0]['time'] if self.chart else 'None'}")
+        # print(f"[DEBUG] now={now}, next_note_time={self.chart[0]['time'] if self.chart else 'None'}")
         for note in self.chart[:]:  # 迭代副本以允許移除
             if not note.get("spawned") and now >= note["time"]:
                 self.spawn_drum(note)
@@ -1091,13 +1093,15 @@ class TaikoGame:
         self.drum_timer_id = self.root.after(16, self.schedule_drums)
 
     def spawn_drum(self, note):
+        # 讀取資料
         drum_type = note['type']
         x = note['start_x']
         y = note['start_y']
         end_x = note['end_x']
         end_y = note['end_y']
-        move_time = note['move_time']  # 讀取移動時間
-
+        move_time = note['move_time'] 
+        
+        # 根據位移來判斷drum是水平還是垂直
         if abs(end_x - x) > abs(end_y - y):
             width = 20
             height = 80
@@ -1117,9 +1121,9 @@ class TaikoGame:
         )
         drum_ids.append(border_id)
 
-        # 畫漸層
+        # 透過連續多個rectangle以達到漸層的效果
         if width > height:
-            # 水平鼓，橫向漸層
+            # 水平的drum
             step_width = width // len(gradient_colors)
             for i, color in enumerate(gradient_colors):
                 step_x1 = x - width // 2 + i * step_width
@@ -1130,7 +1134,7 @@ class TaikoGame:
                 )
                 drum_ids.append(rect_id)
         else:
-            # 垂直鼓，直向漸層
+            # 垂直的drum
             step_height = height // len(gradient_colors)
             for i, color in enumerate(gradient_colors):
                 step_y1 = y - height // 2 + i * step_height
@@ -1141,7 +1145,6 @@ class TaikoGame:
                 )
                 drum_ids.append(rect_id)
 
-        # 🔧 改為使用 note 本身的時間，不用即時計算 now
         start_time = note['time']
         hit_time = start_time + move_time
 
@@ -1158,7 +1161,8 @@ class TaikoGame:
             'last_x': x,
             'last_y': y,
             'width': width,
-            'height': height
+            'height': height,
+            'interactive': note.get('id', -1) != 0 
         })
     
     def get_gradient_colors(self, drum_type, steps=10):
@@ -1178,6 +1182,7 @@ class TaikoGame:
         return colors
 
     def move_drums(self):
+        # 確保遊戲還沒結束和沒有處於暫停狀態
         if not self.canvas.winfo_exists():
             return
 
@@ -1186,10 +1191,11 @@ class TaikoGame:
             return
 
         now = self.get_game_time() * 1000
-        print(f"[DEBUG] time={now:.1f}ms")
+        # print(f"[DEBUG] time={now:.1f}ms")
         new_drums = []
         missed_drums = []
-
+        
+        # 對所有的drums進行移動
         for drum in self.drums:
             start_x = drum['start_x']
             start_y = drum['start_y']
@@ -1219,17 +1225,21 @@ class TaikoGame:
 
         # 刪除超時鼓
         for drum in missed_drums:
-            self.show_feedback("Miss", "red")
+            if drum.get("interactive", True):
+                self.show_feedback("Miss", "red")
+                self.combo = 0
+                self.miss += 1
+                self.update_score()
+
             for item_id in drum['id']:
                 self.canvas.delete(item_id)
-            self.combo = 0
-            self.miss += 1
-            self.update_score()
+
 
         self.drums = new_drums
 
         self.check_game_over()
         self.move_timer_id = self.root.after(16, self.move_drums)
+
 
     def hit_red(self, event):
         self.play_hit_sound('red')
@@ -1239,52 +1249,24 @@ class TaikoGame:
         self.play_hit_sound('blue')
         self.check_hit('blue')
 
+    def point_to_line_distance(self, px, py, x1, y1, x2, y2):
+        line_dx = x2 - x1
+        line_dy = y2 - y1
+
+        if line_dx == 0 and line_dy == 0:
+            return math.hypot(px - x1, py - y1)  # 線是個點
+
+        t = ((px - x1) * line_dx + (py - y1) * line_dy) / (line_dx**2 + line_dy**2)
+        t = max(0, min(1, t))  # 限制在線段範圍內
+        nearest_x = x1 + t * line_dx
+        nearest_y = y1 + t * line_dy
+        return math.hypot(px - nearest_x, py - nearest_y)
+
     def check_hit(self, hit_type):
-        if hit_type is None:
-            # 自動 Miss 判定（鼓通過判定線未擊中）
-            to_remove = []
-            for drum in self.drums:
-                drum_x = drum['last_x']
-                drum_y = drum['last_y']
+        matched_drums = []         
+        matched_drum_ids = set()   # 防止重複計算
 
-                for line in self.lines:
-                    if not line.get("created") or line.get("expired"):
-                        continue
-
-                    coords = self.canvas.coords(line["current_id"])
-                    if len(coords) != 4:
-                        continue
-
-                    x1, y1, x2, y2 = coords
-                    is_vertical = abs(x1 - x2) < 10
-
-                    line_x_min = min(x1, x2) - HIT_RANGE
-                    line_x_max = max(x1, x2) + HIT_RANGE
-                    line_y_min = min(y1, y2) - HIT_RANGE
-                    line_y_max = max(y1, y2) + HIT_RANGE
-
-                    if is_vertical:
-                        if drum_y > line_y_max:
-                            to_remove.append(drum)
-                            break
-                    else:
-                        if drum_x > line_x_max:
-                            to_remove.append(drum)
-                            break
-
-            for drum in to_remove:
-                self.show_feedback("Miss", "red")
-                for item_id in drum['id']:
-                    self.canvas.delete(item_id)
-                self.drums.remove(drum)
-                self.combo = 0
-                self.miss += 1
-                self.update_score()
-            return
-
-        # 玩家有擊鍵，支持多鼓判定
-        matched_drums = []
-
+        # 遍歷所有的判定線
         for line in self.lines:
             if not line.get("created") or line.get("expired"):
                 continue
@@ -1294,59 +1276,80 @@ class TaikoGame:
                 continue
 
             x1, y1, x2, y2 = coords
-            is_vertical = abs(x1 - x2) < 10
-
-            line_x_min = min(x1, x2) - HIT_RANGE
-            line_x_max = max(x1, x2) + HIT_RANGE
-            line_y_min = min(y1, y2) - HIT_RANGE
-            line_y_max = max(y1, y2) + HIT_RANGE
 
             for drum in self.drums:
+                # 檢查是否重複計算和打擊是否正確
+                if not drum.get("interactive", True):
+                    continue
                 if drum['type'] != hit_type:
+                    continue 
+                if id(drum) in matched_drum_ids:
                     continue
 
                 drum_x = drum['last_x']
                 drum_y = drum['last_y']
 
-                if is_vertical:
-                    if line_x_min <= drum_x <= line_x_max and line_y_min <= drum_y <= line_y_max:
-                        matched_drums.append(drum)
-                else:
-                    if line_y_min <= drum_y <= line_y_max and line_x_min <= drum_x <= line_x_max:
-                        matched_drums.append(drum)
+                # 計算 drum 與線段的最短距離
+                distance = self.point_to_line_distance(drum_x, drum_y, x1, y1, x2, y2)
 
+                # 命中判定，分為miss great perfect三個判定區間
+                if distance <= HIT_RANGE_GREAT:
+                    if distance <= HIT_RANGE_PERFECT:
+                        rating = "Perfect"
+                        color = "cyan"
+                        score = 100
+                        self.perfect += 1
+                    else:
+                        rating = "Great"
+                        color = "lime"
+                        score = 70
+                        self.great += 1
+
+                    # 記錄這次命中
+                    matched_drums.append((drum, rating, color, score))
+                    matched_drum_ids.add(id(drum))
+
+        # 若有成功命中 drum
         if matched_drums:
-            self.show_feedback("Perfect", "cyan")
-            for drum in matched_drums:
-                self.show_hit_effect(drum['last_x'], drum['last_y'])  # ✅ 正確位置
+            for drum, rating, color, score in matched_drums:
+                self.show_feedback(rating, color)  # 顯示命中文字
+                self.show_hit_effect(drum['last_x'], drum['last_y'])  # 顯示特效
                 for item_id in drum['id']:
-                    self.canvas.delete(item_id)
+                    self.canvas.delete(item_id)  # 從畫面上移除 drum
                 self.drums.remove(drum)
-                self.combo += 1
-                self.perfect += 1
-                self.max_combo = self.combo if self.combo > self.max_combo else self.max_combo
-                self.score += 100
+                self.combo += 1  # Combo 計數
+                self.max_combo = max(self.max_combo, self.combo)
+
+                # Combo加乘分數
+                
+                if(self.combo > 10):
+                    score *= 1.1
+                elif(self.combo > 30):
+                    score *= 1.2
+                elif(self.combo > 50):
+                    score *= 1.3
+                   
+                self.score += score
         else:
+            # 沒打中任何 drum
             self.show_feedback("Miss", "red")
             self.combo = 0
+            self.miss += 1
 
-        self.update_score()
+        self.update_score()  # 更新 UI 上的分數顯示
     
     def show_feedback(self, text, color="yellow"):
-        # 如果之前有排程自動清除 feedback，先取消
         if self.feedback_after_id:
             self.root.after_cancel(self.feedback_after_id)
 
-        # 更新畫面文字
         self.canvas.itemconfigure(self.feedback_text, text=text, fill=color)
 
-        # 安排新的清除任務，並記錄 ID
         self.feedback_after_id = self.root.after(500, lambda: self.canvas.itemconfigure(self.feedback_text, text=""))
 
-    def show_hit_effect(self, x, y, color="#FFFF00", max_radius=30, duration=200):
+    def show_hit_effect(self, x, y, color="#FFFF00", max_radius=50, duration=200):
 
         rect = self.canvas.create_rectangle(
-            x - 5, y - 5, x + 5, y + 5,
+            x - 20, y - 20, x + 20, y + 20,
             outline=color, width=2, fill=""
         )
 
@@ -1922,6 +1925,7 @@ class Score_Summary:
 # 主程式
 if __name__ == '__main__':
     root = tk.Tk()
+    root.resizable(False,False)
     settings = GameSettings()
     menu = MainMenu(root, settings)
     root.mainloop()
