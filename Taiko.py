@@ -357,7 +357,7 @@ class MainMenu:
 class SongSelect:
     def __init__(self, root, settings):
         self.root = root
-        
+        self.cancel_bgm_callback = None
         self.song_img = None
         self.settings = settings
         self.confirmed = False  # 初始值
@@ -479,8 +479,11 @@ class SongSelect:
             self.bgm = os.path.join("assets", "sound", "為什麼要演奏春日影.mp3")
             self.play_bgm()
 
-            # 等待第一段音效播放完後再播放正式歌曲
+            self.cancel_bgm_callback = False  # 清除取消標記
+
             def play_real_bgm():
+                if self.cancel_bgm_callback:
+                    return  # 若已取消，就不要播放正式 BGM
                 self.bgm = os.path.join(SONG_LIST, f'{song}.mp3')
                 self.play_bgm()
 
@@ -576,6 +579,7 @@ class SongSelect:
         self.beatmap_path = os.path.join("assets", "beatmap", f"{song}.json")
         self.song_path = os.path.join("assets", "song", f"{song}.mp3")
         pygame.mixer.music.stop()
+        self.cancel_bgm_callback = True  # 使用者提早進入遊戲，取消音效後續切歌
         self.cleanup()
         if self.selected_mode == 'taiko':
             TaikoGame(self.root, self.song_path, self.beatmap_path, self.settings, self.mv_able)
