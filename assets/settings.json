@@ -1,7 +1,7 @@
 [
     {
-        "volume": 100.0,
-        "red_button": "<KeyPress-a>",
+        "volume": 100,
+        "red_button": "<KeyPress-z>",
         "blue_button": "<KeyPress-x>"
     }
 ]
